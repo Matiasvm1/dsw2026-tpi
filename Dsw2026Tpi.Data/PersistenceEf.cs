@@ -16,6 +16,8 @@ public class PersistenceEf: IPersistence
 
     public async Task<T> Add<T>(T entity) where T : EntityBase
     {
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
         await _context.AddAsync(entity);
         await _context.SaveChangesAsync();
         return entity;
@@ -23,8 +25,8 @@ public class PersistenceEf: IPersistence
 
     public async Task<T> Delete<T>(T entity) where T : EntityBase
     {
-        var a = entity.Id;
-        _context.Remove(entity);
+        entity.SoftDelete();
+        _context.Update(entity);
         await _context.SaveChangesAsync();
         return entity;
     }
@@ -51,6 +53,7 @@ public class PersistenceEf: IPersistence
 
     public async Task<T> Update<T>(T entity) where T : EntityBase
     {
+        entity.UpdatedAt = DateTime.UtcNow;
         _context.Update(entity);
         await _context.SaveChangesAsync();
         return entity;
