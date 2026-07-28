@@ -8,15 +8,7 @@ namespace Dsw2026Tpi.CrossCutting.Exceptions;
 /// </summary>
 public class ValidationException : AppException
 {
-    public ValidationException()
-        : base(
-            ErrorCodes.VALIDATION_ERROR,
-            nameof(ErrorCodes.VALIDATION_ERROR))
-    {
-    }
+    public ValidationException(string errorCode, string message) : base(errorCode, message) { }
 
-    public ValidationException(string message, string errorCode)
-        : base(message, errorCode)
-    {
-    }
+    public ValidationException() : base(nameof(ErrorCodes.VALIDATION_ERROR), ErrorCodes.VALIDATION_ERROR) { }
 }

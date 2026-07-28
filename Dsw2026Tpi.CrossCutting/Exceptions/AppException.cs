@@ -20,8 +20,8 @@ public abstract class AppException : Exception
     public Dictionary<string, object>? AdditionalData { get; set; }
 
     protected AppException(
-        string message,
         string errorCode,
+        string message,
         Exception? innerException = null)
         : base(message, innerException)
     {

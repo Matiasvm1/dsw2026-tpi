@@ -8,8 +8,5 @@ namespace Dsw2026Tpi.CrossCutting.Exceptions;
 public class EntityNotFoundException : AppException
 {
     public EntityNotFoundException(string entityName)
-        : base(string.Format(ErrorCodes.ENTITY_NOTFOUND, entityName),
-            nameof(ErrorCodes.ENTITY_NOTFOUND))
-    {
-    }
+    : base(nameof(ErrorCodes.ENTITY_NOTFOUND), string.Format(ErrorCodes.ENTITY_NOTFOUND, entityName)) { }
 }

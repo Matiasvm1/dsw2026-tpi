@@ -7,10 +7,5 @@ namespace Dsw2026Tpi.CrossCutting.Exceptions;
 /// </summary>
 public class AuthenticationException : AppException
 {
-    public AuthenticationException()
-        : base(
-            ErrorCodes.AUTHENTICATION_FAILED,
-            nameof(ErrorCodes.AUTHENTICATION_FAILED))
-    {
-    }
+    public AuthenticationException() : base(nameof(ErrorCodes.AUTHENTICATION_FAILED), ErrorCodes.AUTHENTICATION_FAILED) { }
 }

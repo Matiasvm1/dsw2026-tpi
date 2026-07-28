@@ -1,5 +1,7 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2026Tpi.Api.Controllers;
@@ -15,6 +17,7 @@ public class AuthenticationController : AppController
     }
 
     [HttpPost("admin/register")]
+    [Authorize(Policy = Policies.AdminPolicy)]   // solo un admin puede crear otro admin
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterModel.Request request)

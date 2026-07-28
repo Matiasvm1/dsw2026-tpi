@@ -34,7 +34,17 @@ public class Program
 
             var app = builder.Build();
 
-            app.UseSerilogRequestLogging();
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.MessageTemplate =
+                    "{RequestMethod} {RequestPathWithoutQuery} respondió {StatusCode} en {Elapsed:0.0000} ms";
+
+                options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+                {
+                    // Request.Path NO incluye el query string; Request.QueryString sí.
+                    diagnosticContext.Set("RequestPathWithoutQuery", httpContext.Request.Path.Value);
+                };
+            });
 
             if (app.Environment.IsProduction())
             {
