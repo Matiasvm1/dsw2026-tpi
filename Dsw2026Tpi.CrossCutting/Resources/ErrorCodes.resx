@@ -132,10 +132,94 @@
   <data name="REGISTER_USER_INVALID" xml:space="preserve">
     <value>Datos de registración de usuario no válidos</value>
   </data>
+  <data name="SPECIALTY_NAME_REQUIRED" xml:space="preserve">
+    <value>El nombre es obligatorio</value>
+  </data>
+  <data name="SPECIALTY_NAME_LENGTH" xml:space="preserve">
+    <value>El nombre debe tener entre 3 y 100 caracteres</value>
+  </data>
   <data name="UNHANDLED_ERROR" xml:space="preserve">
     <value>Se produjo un error no controlado</value>
   </data>
   <data name="VALIDATION_ERROR" xml:space="preserve">
     <value>Uno o más errores de validación ocurrieron</value>
+  </data>
+  <data name="SPECIALTY_DESCRIPTION_LENGTH" xml:space="preserve">
+    <value>La descripción debe tener entre 10 y 100 caracteres</value>
+  </data>
+  <data name="SPECIALTY_DUPLICATED" xml:space="preserve">
+    <value>Ya existe una especialidad con ese nombre</value>
+  </data>
+  <data name="SPECIALTY_NOT_FOUND" xml:space="preserve">
+    <value>La especialidad indicada no existe</value>
+  </data>
+  <data name="DOCTOR_NAME_LENGTH" xml:space="preserve">
+    <value>El nombre debe tener entre 3 y 100 caracteres</value>
+  </data>
+  <data name="DOCTOR_NOT_FOUND" xml:space="preserve">
+    <value>El médico indicado no existe</value>
+  </data>
+  <data name="DOCTOR_SPECIALTY_NOT_FOUND" xml:space="preserve">
+    <value>La especialidad indicada no existe</value>
+  </data>
+  <data name="AVAILABILITY_DAYS_REQUIRED" xml:space="preserve">
+    <value>Debe indicar al menos un día de atención</value>
+  </data>
+  <data name="AVAILABILITY_INVALID_DAY" xml:space="preserve">
+    <value>El día indicado no es un día válido de la semana</value>
+  </data>
+  <data name="AVAILABILITY_INVALID_TIME" xml:space="preserve">
+    <value>El formato de hora debe ser HH:mm</value>
+  </data>
+  <data name="AVAILABILITY_INVALID_RANGE" xml:space="preserve">
+    <value>La hora de inicio debe ser anterior a la de fin</value>
+  </data>
+  <data name="AVAILABILITY_NOT_ALIGNED" xml:space="preserve">
+    <value>Los horarios deben empezar y terminar en bloques de 30 minutos</value>
+  </data>
+  <data name="AVAILABILITY_OVERLAP" xml:space="preserve">
+    <value>El horario se superpone con otra disponibilidad del médico</value>
+  </data>
+  <data name="AVAILABILITY_HAS_BOOKED_APPOINTMENTS" xml:space="preserve">
+    <value>No se puede reemplazar el mes: hay turnos reservados</value>
+  </data>
+  <data name="APPOINTMENT_SLOT_NOT_FOUND" xml:space="preserve">
+    <value>El horario indicado no existe</value>
+  </data>
+  <data name="APPOINTMENT_SLOT_UNAVAILABLE" xml:space="preserve">
+    <value>El horario seleccionado no está disponible</value>
+  </data>
+  <data name="APPOINTMENT_CONFLICT" xml:space="preserve">
+    <value>El horario seleccionado ya fue reservado</value>
+  </data>
+  <data name="APPOINTMENT_IN_THE_PAST" xml:space="preserve">
+    <value>No se pueden reservar turnos en fechas u horarios pasados</value>
+  </data>
+  <data name="APPOINTMENT_NOT_CANCELLABLE" xml:space="preserve">
+    <value>Solo se pueden cancelar turnos reservados</value>
+  </data>
+  <data name="APPOINTMENT_REASON_LENGTH" xml:space="preserve">
+    <value>El motivo debe tener al menos 5 caracteres</value>
+  </data>
+  <data name="APPOINTMENT_NOT_FOUND" xml:space="preserve">
+    <value>El turno indicado no existe</value>
+  </data>
+  <data name="APPOINTMENT_DOCTOR_MISMATCH" xml:space="preserve">
+    <value>El horario seleccionado no pertenece al médico indicado</value>
+  </data>
+  <data name="APPOINTMENT_FORBIDDEN" xml:space="preserve">
+    <value>No puede operar sobre turnos de otro paciente</value>
+  </data>
+  <data name="APPOINTMENT_DATE_INVALID" xml:space="preserve">
+    <value>El formato de fecha debe ser YYYY-MM-DD</value>
+  </data>
+  <data name="PATIENT_DNI_INVALID" xml:space="preserve">
+    <value>El DNI debe tener entre 7 y 10 dígitos</value>
+  </data>
+  <data name="PATIENT_NOT_FOUND" xml:space="preserve">
+    <value>No existe un paciente con ese DNI</value>
+  </data>
+  <data name="UNIQUE_CONSTRAINT_VIOLATION" xml:space="preserve">
+    <value>El registro ya existe</value>
   </data>
 </root>
