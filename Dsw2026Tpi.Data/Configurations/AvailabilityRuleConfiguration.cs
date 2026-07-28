@@ -1,5 +1,4 @@
-﻿using System;
-using Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
