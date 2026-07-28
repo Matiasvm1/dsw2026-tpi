@@ -60,8 +60,8 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
     {
-        if (!request.Email.IsEmailValid()) throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID,
-            nameof(ErrorCodes.REGISTER_USER_INVALID));
+        if (!request.Email.IsEmailValid()) throw new ValidationException(
+            nameof(ErrorCodes.REGISTER_USER_INVALID), ErrorCodes.REGISTER_USER_INVALID);
 
         var user = new ApplicationUser
         {

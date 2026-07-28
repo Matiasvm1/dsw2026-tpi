@@ -39,7 +39,7 @@ public class ExceptionHandlingMiddleware
         {
             ValidationException => HttpStatusCode.BadRequest,
             AuthenticationException => HttpStatusCode.Unauthorized,   // anterior 409 — H03
-            AuthorizationException => HttpStatusCode.Forbidden,       // nuevo 401 — H04
+            AuthorizationException => HttpStatusCode.Forbidden,       // anterior 401 — H04
             EntityNotFoundException => HttpStatusCode.NotFound,
             ConflictException or BusinessRuleException => HttpStatusCode.Conflict,
             _ => HttpStatusCode.InternalServerError,

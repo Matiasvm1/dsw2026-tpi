@@ -66,6 +66,8 @@ public class Program
 
             Log.Information("Aplicación iniciada correctamente");
 
+            await app.SeedAdminUserAsync();
+
             await app.RunAsync();
         }
         catch (HostAbortedException)
