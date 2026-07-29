@@ -29,7 +29,7 @@ public class Program
             builder.Services.AddApplicationPersistence(builder.Configuration);
             builder.Services.AddAppCors(builder.Configuration);
             builder.Services.AddAppDependencies();
-            builder.Services.AddControllers();
+            builder.Services.AddAppControllers();
             builder.Services.AddHealthChecks();
 
             var app = builder.Build();
