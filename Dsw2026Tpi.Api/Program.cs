@@ -46,6 +46,11 @@ public class Program
                 };
             });
 
+            // Va despues del request logging (para que Serilog registre el status final y no un 500
+            // con stack trace) y antes de la autenticacion, de modo que toda excepcion aguas abajo
+            // salga con el sobre de error del contrato.
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
+
             if (app.Environment.IsProduction())
             {
                 app.UseHttpsRedirection();
@@ -59,7 +64,6 @@ public class Program
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseCors();
-            app.UseMiddleware<ExceptionHandlingMiddleware>();
 
             app.MapControllers();
             app.MapHealthChecks("/health-check");

@@ -8,6 +8,14 @@ namespace Dsw2026Tpi.Api.Middlewares;
 
 public class ExceptionHandlingMiddleware
 {
+    // El contrato exige el sobre de error en camelCase (errorCode, message, details, field, issue).
+    // JsonSerializer.Serialize sin opciones usa los nombres de las propiedades tal cual (PascalCase),
+    // a diferencia de MVC, que ya serializa en camelCase por defecto.
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
@@ -44,7 +52,7 @@ public class ExceptionHandlingMiddleware
             ConflictException or BusinessRuleException => HttpStatusCode.Conflict,
             _ => HttpStatusCode.InternalServerError,
         };
-        var result = JsonSerializer.Serialize(error);
+        var result = JsonSerializer.Serialize(error, SerializerOptions);
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)status;
         await context.Response.WriteAsync(result);
