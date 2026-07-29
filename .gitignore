@@ -365,3 +365,12 @@ FodyWeavers.xsd
 .miro
 Docs
 tools
+
+Logs/
+appsettings.*.local.json
+secrets.json
+.idea/
+*.sln.iml
+TestResults/
+[Tt]est[Rr]esult*/
+.DS_Store

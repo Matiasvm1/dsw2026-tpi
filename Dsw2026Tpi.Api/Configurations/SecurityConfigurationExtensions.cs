@@ -89,10 +89,13 @@ public static class SecurityConfigurationExtensions
         {
             options.Password = new PasswordOptions
             {
-                RequiredLength = 6,
+                RequiredLength = 8, // Anteriormente eran 6, la RNF01 exige minimo 8
                 RequireLowercase = true,
                 RequireUppercase = true,
-                RequireDigit = true
+                RequireDigit = true,
+                // PasswordOptions.RequireNonAlphanumeric viene en true por defecto. Se declara
+                // explicitamente para que la politica sea exactamente estas cuatro reglas.
+                RequireNonAlphanumeric = false
             };
 
         }).AddRoles<IdentityRole>()
