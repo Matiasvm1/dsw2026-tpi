@@ -25,7 +25,14 @@ public class DoctorService : IDoctorService
                                                    d => string.IsNullOrWhiteSpace(name) ||
                                                    d.Name.Contains(name), x => x.Name, nameof(Doctor.Speciality));
 
-        return doctors.Map(d => new DoctorModel.Response(d.Id, d.Name, d.LicenseNumber,
-            new DoctorModel.SpecialityDto(d.Speciality?.Id, d.Speciality?.Name)));
+        return doctors.Map(d => new DoctorModel.Response(
+     d.Id,
+     d.Name,
+     d.LicenseNumber,
+     d.Speciality is null
+         ? null
+         : new DoctorModel.SpecialityDto(
+             d.Speciality.Id,
+             d.Speciality.Name)));
     }
 }
