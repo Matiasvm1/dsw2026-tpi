@@ -33,22 +33,22 @@ public class PersistenceEf: IPersistence
 
     public async Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
     {
-        return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(predicate);
+        return await Include(Query<T>(), include).FirstOrDefaultAsync(predicate);
     }
 
     public async Task<IEnumerable<T>?> GetAll<T>(params string[] include) where T : EntityBase
     {
-        return await Include(_context.Set<T>(), include).ToListAsync();
+        return await Include(Query<T>(), include).ToListAsync();
     }
 
     public async Task<T?> GetById<T>(Guid id, params string[] include) where T : EntityBase
     {
-        return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(e => e.Id == id);
+        return await Include(Query<T>(), include).FirstOrDefaultAsync(e => e.Id == id);
     }
 
     public async Task<IEnumerable<T>?> GetFiltered<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
     {
-        return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
+        return await Include(Query<T>(), include).Where(predicate).ToListAsync();
     }
 
     public async Task<T> Update<T>(T entity) where T : EntityBase
@@ -67,12 +67,34 @@ public class PersistenceEf: IPersistence
     {
         var skip = (pageIndex - 1) * pageSize;
 
-        var filtered = Include(_context.Set<T>(), includes).Where(predicate);
+        var filtered = Include(Query<T>(), includes).Where(predicate);
         var total = await filtered.CountAsync();
 
         var data = await filtered.OrderBy(sortOrder).Skip(skip).Take(pageSize).ToListAsync();
 
         return new Pagination<T>(pageSize, pageIndex, total, data);
+    }
+
+    // Punto de entrada único de las lecturas. La baja lógica se aplica acá, explícitamente sobre
+    // la raíz, en vez de dejarla en manos del filtro global del DbContext.
+    //
+    // El filtro global también se aplicaba a las navegaciones incluidas, y eso rompía las
+    // consultas: al incluir una navegación requerida (Doctor -> Speciality) EF genera un
+    // INNER JOIN, y si el principal estaba dado de baja la fila del dependiente desaparecía de
+    // los resultados. Pero CountAsync() descarta los Include, así que el total la seguía
+    // contando: la respuesta se contradecía sola (total: 2 con una sola fila en data).
+    //
+    // IgnoreQueryFilters() apaga el filtro global de toda la consulta y el Where lo repone solo
+    // sobre la raíz. Así el dependiente sobrevive a la baja de su principal, y total y data
+    // cuentan siempre las mismas filas.
+    //
+    // Consecuencia a tener presente: las navegaciones incluidas ya no ocultan los eliminados. En
+    // las navegaciones de referencia es justamente lo que queremos (el médico conserva su
+    // especialidad histórica). Si alguna vez se incluye una colección y sus eliminados no deben
+    // aparecer, ese filtro va explícito en el service.
+    private IQueryable<T> Query<T>() where T : EntityBase
+    {
+        return _context.Set<T>().IgnoreQueryFilters().Where(e => !e.Deleted);
     }
 
     private static IQueryable<T> Include<T>(IQueryable<T> query, string[] includes) where T : EntityBase
