@@ -25,9 +25,23 @@ public class DoctorService : IDoctorService
     // El case-insensitive lo aporta la collation de SQL Server.
     public async Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null)
     {
+        if (name is not null &&
+    (string.IsNullOrWhiteSpace(name) ||
+     name.Trim().Length is < 3 or > 100))
+        {
+            throw new ValidationException(
+                    nameof(ErrorCodes.DOCTOR_NAME_LENGTH),
+                    ErrorCodes.DOCTOR_NAME_LENGTH)
+                .WithDetail(
+                    nameof(name),
+                    "length_between_3_and_100");
+        }
+
+        var normalizedName = name?.Trim();
+
         var doctors = await _persistence.Paginate<Doctor, string>(pagination.PageSize, pagination.PageIndex,
-                                                   d => string.IsNullOrWhiteSpace(name) ||
-                                                   d.Name.Contains(name), x => x.Name, nameof(Doctor.Speciality));
+                                                   d => normalizedName == null ||
+     d.Name.Contains(normalizedName), x => x.Name, nameof(Doctor.Speciality));
 
         return doctors.Map(d => new DoctorModel.Response(
      d.Id,
