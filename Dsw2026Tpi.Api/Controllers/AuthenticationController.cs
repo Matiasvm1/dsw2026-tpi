@@ -29,9 +29,20 @@ public class AuthenticationController : AppController
     [HttpPost("admin/login")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginAdminModel.Request request)
     {
         var result = await _authenticationService.LoginAdmin(request);
+        return Ok(result);
+    }
+
+    [HttpPost("patient/login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginPatient([FromBody] LoginPatientModel.Request request)
+    {
+        var result = await _authenticationService.LoginPatient(request);
         return Ok(result);
     }
 }
