@@ -6,6 +6,7 @@ using Dsw2026Tpi.CrossCutting.Helpers;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
 using Dsw2026Tpi.CrossCutting.Resources;
+using Microsoft.Extensions.Logging;
 
 namespace Dsw2026Tpi.Application.Services;
 
@@ -13,11 +14,13 @@ public class AvailabilityService : IAvailabilityService
 {
     private readonly IPersistence _persistence;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AvailabilityService> _logger;
 
-    public AvailabilityService(IPersistence persistence, IConfiguration configuration)
+    public AvailabilityService(IPersistence persistence, IConfiguration configuration, ILogger<AvailabilityService> logger)
     {
         _persistence = persistence;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<AvailabilityModel.Response> Create(AvailabilityModel.Request request)
@@ -31,7 +34,7 @@ public class AvailabilityService : IAvailabilityService
         var currentMonth = now.Month;
 
         var existingRules = await _persistence.GetFiltered<AvailabilityRule>(
-            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth);
+            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? [];
 
         ValidateNoOverlapsWithExistingRules(parsedDays, existingRules);
 
@@ -56,6 +59,11 @@ public class AvailabilityService : IAvailabilityService
             }
         }
 
+        // D08: la generación de disponibilidad no es un CRUD, se audita.
+        _logger.LogInformation(
+            "Disponibilidad generada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
+            request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
+
         return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
     }
 
@@ -69,12 +77,12 @@ public class AvailabilityService : IAvailabilityService
         var currentMonth = now.Month;
 
         var existingRules = await _persistence.GetFiltered<AvailabilityRule>(
-            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth);
+            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? [];
 
         if (existingRules.Any())
         {
             var ruleIds = existingRules.Select(r => r.Id).ToList();
-            var existingSlots = await _persistence.GetFiltered<AvailabilitySlot>(s => ruleIds.Contains(s.AvailabilityRuleId));
+            var existingSlots = await _persistence.GetFiltered<AvailabilitySlot>(s => ruleIds.Contains(s.AvailabilityRuleId)) ?? [];
             var slotIds = existingSlots.Select(s => s.Id).ToList();
 
             var hasBookedAppointments = await _persistence.First<Appointment>(
@@ -87,6 +95,13 @@ public class AvailabilityService : IAvailabilityService
                     ErrorCodes.AVAILABILITY_HAS_BOOKED_APPOINTMENTS);
             }
 
+            // Los slots se dan de baja antes que sus reglas: el filtro global de baja lógica
+            // trabaja entidad por entidad y no cascadea, así que borrar sólo la regla dejaría los
+            // turnos viejos visibles y el mes quedaría con los de antes más los nuevos.
+            foreach (var slot in existingSlots)
+            {
+                await _persistence.Delete(slot);
+            }
 
             foreach (var rule in existingRules)
             {
@@ -113,6 +128,11 @@ public class AvailabilityService : IAvailabilityService
             }
         }
 
+        // D08: la regeneración de disponibilidad tampoco es un CRUD, se audita.
+        _logger.LogInformation(
+            "Disponibilidad reemplazada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
+            request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
+
         return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
     }
 
@@ -122,7 +142,7 @@ public class AvailabilityService : IAvailabilityService
     {
         var doctor = await _persistence.GetById<Doctor>(request.DoctorId);
         if (doctor is null)
-            throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND));
+            throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
         if (request.Days is null || !request.Days.Any())
             throw new ValidationException(nameof(ErrorCodes.AVAILABILITY_DAYS_REQUIRED), ErrorCodes.AVAILABILITY_DAYS_REQUIRED);
@@ -137,7 +157,10 @@ public class AvailabilityService : IAvailabilityService
             if (!DayOfWeekMapper.TryParse(d.Day, out var dayOfWeek))
                 throw new ValidationException(nameof(ErrorCodes.AVAILABILITY_INVALID_DAY), ErrorCodes.AVAILABILITY_INVALID_DAY);
 
-            if (!TimeOnly.TryParse(d.StartTime, out var startTime) || !TimeOnly.TryParse(d.EndTime, out var endTime))
+            // El contrato pide "HH:mm" y nada más. TryParse a secas acepta "9", "9:00 AM" o
+            // "09:00:45", y los segundos se escaparían del control de alineación de más abajo.
+            if (!TimeOnly.TryParseExact(d.StartTime, "HH:mm", out var startTime) ||
+                !TimeOnly.TryParseExact(d.EndTime, "HH:mm", out var endTime))
                 throw new ValidationException(nameof(ErrorCodes.AVAILABILITY_INVALID_TIME), ErrorCodes.AVAILABILITY_INVALID_TIME);
 
             if (startTime >= endTime)
@@ -210,9 +233,25 @@ public class AvailabilityService : IAvailabilityService
     private HashSet<DateOnly> GetNonWorkingDays()
     {
         var rawDays = _configuration.GetSection("NonWorkingDays").Get<string[]>();
-        if (rawDays is null) return new HashSet<DateOnly>();
+        if (rawDays is null) return [];
 
-        return rawDays.Select(DateOnly.Parse).ToHashSet();
+        var days = new HashSet<DateOnly>();
+
+        foreach (var raw in rawDays)
+        {
+            // Una fecha mal escrita en el appsettings no puede tumbar el alta de disponibilidad
+            // con un 500: se descarta y queda registrada para que se corrija la configuración.
+            if (DateOnly.TryParseExact(raw, "yyyy-MM-dd", out var date))
+            {
+                days.Add(date);
+            }
+            else
+            {
+                _logger.LogWarning("Fecha inválida en NonWorkingDays, se ignora: {RawDate}", raw);
+            }
+        }
+
+        return days;
     }
 
     private record ParsedDayRequest(DayOfWeek DayOfWeek, TimeOnly StartTime, TimeOnly EndTime);
