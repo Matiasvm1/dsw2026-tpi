@@ -18,13 +18,22 @@ public class SpecialityService : ISpecialityService
 
     public async Task<Pagination<SpecialityModel.Response>> GetAll(PaginationQuery pagination, string? name = null)
     {
+        // El filtro es opcional, pero si viene tiene que respetar la misma longitud que el alta.
+        if (name is not null && (string.IsNullOrWhiteSpace(name) || name.Trim().Length is < 3 or > 100))
+        {
+            throw new ValidationException(nameof(ErrorCodes.SPECIALTY_NAME_LENGTH), ErrorCodes.SPECIALTY_NAME_LENGTH)
+                .WithDetail(nameof(name), "length_between_3_and_100");
+        }
+
+        var normalizedName = name?.Trim();
+
         // Recordar que el filtro por nombre debe ser parcial e insensible a mayusculas
         // Al usar .Contains(name) sin StringComparison, EF Core lo termina traduciendo a SQL y la base de datos lo hace case-insensitive por defecto
-        // Si name viene vacío, IsNullOrWhiteSpace da true y el filtro deja pasar a todas las especialidades 
+        // Si no vino name, el predicado da true siempre y pasan todas las especialidades
         var specialities = await _persistence.Paginate<Speciality, string>(
             pagination.PageSize,
             pagination.PageIndex,
-            s => string.IsNullOrWhiteSpace(name) || s.Name.Contains(name),
+            s => normalizedName == null || s.Name.Contains(normalizedName),
             s => s.Name);
 
         // Usamos el método .Map() que ya viene con la clase Pagination.
@@ -36,16 +45,22 @@ public class SpecialityService : ISpecialityService
     {
         Validate(request);
 
-        // Recordar que el nombre debe ser único. Buscamos si ya existe uno igual en la BD
-        var duplicated = await _persistence.First<Speciality>(s => s.Name == request.Name);
+        // Aplicamos Trim() antes de comparar y de guardar para limpiar espacios en blanco accidentales que haya tipeado el usuario
+        var name = request.Name.Trim();
+        var description = request.Description.Trim();
+
+        // Recordar que el nombre debe ser único. Buscamos si ya existe uno igual en la BD.
+        // Se compara contra el nombre YA normalizado: buscando el crudo, " Cardiología" no
+        // encontraría a "Cardiología", se saltearía este 409 y reventaría contra el índice
+        // único de la base con un 500.
+        var duplicated = await _persistence.First<Speciality>(s => s.Name == name);
         if (duplicated is not null)
         {
             // Usamos el orden obligatorio corregido en la primera parte (Hallazgo H18), primero nameof (código JSON), luego el recurso (mensaje en español)
             throw new ConflictException(nameof(ErrorCodes.SPECIALTY_DUPLICATED), ErrorCodes.SPECIALTY_DUPLICATED);
         }
 
-        // Aplicamos Trim() antes de guardar para limpiar espacios en blanco accidentales que haya tipeado el usuario
-        var speciality = new Speciality(request.Name.Trim(), request.Description.Trim());
+        var speciality = new Speciality(name, description);
         await _persistence.Add(speciality);
 
         return Map(speciality);
@@ -55,20 +70,23 @@ public class SpecialityService : ISpecialityService
     {
         Validate(request);
 
+        var name = request.Name.Trim();
+        var description = request.Description.Trim();
+
         //  Verificamos que la especialidad que quieren editar realmente exista, sino 404
         var speciality = await _persistence.GetById<Speciality>(id)
-            ?? throw new EntityNotFoundException(nameof(Speciality));
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.SPECIALTY_NOT_FOUND), ErrorCodes.SPECIALTY_NOT_FOUND);
 
-        //  Validamos unicidad, pero excluyendo la especialidad actual (s.Id != id) 
+        //  Validamos unicidad sobre el nombre normalizado, pero excluyendo la especialidad actual (s.Id != id)
         // para que no salte error de "duplicado" si el usuario guarda los cambios sin haber modificado el nombre
-        var duplicated = await _persistence.First<Speciality>(s => s.Name == request.Name && s.Id != id);
+        var duplicated = await _persistence.First<Speciality>(s => s.Name == name && s.Id != id);
         if (duplicated is not null)
         {
             throw new ConflictException(nameof(ErrorCodes.SPECIALTY_DUPLICATED), ErrorCodes.SPECIALTY_DUPLICATED);
         }
 
         //  Usamos el método de dominio (que pasamos a private set) para proteger la entidad
-        speciality.Update(request.Name.Trim(), request.Description.Trim());
+        speciality.Update(name, description);
         await _persistence.Update(speciality);
 
         return Map(speciality);
@@ -77,7 +95,7 @@ public class SpecialityService : ISpecialityService
     public async Task Delete(Guid id)
     {
         var speciality = await _persistence.GetById<Speciality>(id)
-            ?? throw new EntityNotFoundException(nameof(Speciality));
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.SPECIALTY_NOT_FOUND), ErrorCodes.SPECIALTY_NOT_FOUND);
 
         
         // esto hace una "baja lógica" automáticamente (Deleted = true) en lugar de borrar el registro físicamente de la base

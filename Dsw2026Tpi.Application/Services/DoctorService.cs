@@ -95,7 +95,7 @@ public class DoctorService : IDoctorService
         Validate(request);
 
         var doctor = await _persistence.GetById<Doctor>(id)
-            ?? throw new EntityNotFoundException(nameof(Doctor));
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
         var speciality = await _persistence.GetById<Speciality>(
             request.SpecialityId);
@@ -129,7 +129,7 @@ public class DoctorService : IDoctorService
     public async Task Delete(Guid id)
     {
         var doctor = await _persistence.GetById<Doctor>(id)
-            ?? throw new EntityNotFoundException(nameof(Doctor));
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
         await _persistence.Delete(doctor);
     }
@@ -139,7 +139,7 @@ public class DoctorService : IDoctorService
     GetAvailabilities(Guid doctorId)
     {
         var doctor = await _persistence.GetById<Doctor>(doctorId)
-            ?? throw new EntityNotFoundException(nameof(Doctor));
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
