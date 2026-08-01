@@ -21,7 +21,11 @@ public class AvailabilityRuleConfiguration : IEntityTypeConfiguration<Availabili
                .HasForeignKey(r => r.DoctorId)
                .OnDelete(DeleteBehavior.Restrict);
 
+        // Filtrado por Deleted: el PUT de disponibilidades da de baja las reglas del mes y las
+        // vuelve a generar. Sin el filtro, reconfigurar el mismo día con el mismo horario choca
+        // contra la regla vieja y devuelve un 500.
         builder.HasIndex(r => new { r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime })
-               .IsUnique();
+               .IsUnique()
+               .HasFilter("[Deleted] = 0");
     }
 }
