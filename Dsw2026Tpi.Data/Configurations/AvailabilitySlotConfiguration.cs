@@ -26,6 +26,10 @@ public class AvailabilitySlotConfiguration : IEntityTypeConfiguration<Availabili
                .HasForeignKey(s => s.AvailabilityRuleId)
                .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(s => new { s.DoctorId, s.SlotDate, s.StartTime }).IsUnique();
+        // Filtrado por Deleted, por el mismo motivo que la regla: el PUT da de baja los slots del
+        // mes y los regenera.
+        builder.HasIndex(s => new { s.DoctorId, s.SlotDate, s.StartTime })
+               .IsUnique()
+               .HasFilter("[Deleted] = 0");
     }
 }

@@ -14,7 +14,10 @@ public class PatientConfiguration : IEntityTypeConfiguration<Patient>
         builder.Property(p => p.Dni).IsRequired().HasMaxLength(10);
         builder.Property(p => p.FullName).HasMaxLength(150);   // varchar(150) y NULL según el modelo de datos (D35)
 
-        builder.HasIndex(p => p.Dni).IsUnique();
-        builder.HasIndex(p => p.UserId).IsUnique();
+        // Filtrados por Deleted: un índice único sin filtro le deja la clave reservada para
+        // siempre a una fila dada de baja. Sin esto, un paciente eliminado bloquea su DNI y su
+        // usuario, y no puede volver a registrarse nunca más.
+        builder.HasIndex(p => p.Dni).IsUnique().HasFilter("[Deleted] = 0");
+        builder.HasIndex(p => p.UserId).IsUnique().HasFilter("[Deleted] = 0");
     }
 }

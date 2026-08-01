@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Identity;
-using Dsw2026Tpi.Domain.Entities; // ELIMINAR JUNTO CON INYECCION
 
 namespace Dsw2026Tpi.Api.Controllers;
 
@@ -31,23 +30,4 @@ public class AvailabilityController : AppController
         var response = await _service.Update(request);
         return Ok(response);
     }
-
-    #region INYECCION
-    [HttpPost("temp-seed")]
-    [AllowAnonymous]
-    public async Task<IActionResult> SeedDoctor([FromServices] Dsw2026Tpi.Domain.Interfaces.IPersistence persistence)
-    {
-
-        var speciality = new Speciality("Cardiología", "Especialidad inyectada");
-        await persistence.Add(speciality);
-
-        var doctor = new Doctor("Dr. Gregory House", "MP-1234", speciality.Id);
-        await persistence.Add(doctor);
-
-        return Ok(new { 
-            Mensaje = "Médico inyectado correctamente", 
-            DoctorId = doctor.Id 
-        });
-    }
-    #endregion
 }

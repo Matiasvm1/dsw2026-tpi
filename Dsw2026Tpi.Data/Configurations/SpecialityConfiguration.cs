@@ -12,6 +12,8 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Name).IsRequired().HasMaxLength(100);
         builder.Property(s => s.Description).IsRequired().HasMaxLength(100);
-        builder.HasIndex(s => s.Name).IsUnique();
+        // Filtrado por Deleted: si no, una especialidad dada de baja deja su nombre tomado y no se
+        // puede volver a crear.
+        builder.HasIndex(s => s.Name).IsUnique().HasFilter("[Deleted] = 0");
     }
 }
