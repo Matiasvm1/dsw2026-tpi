@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -14,7 +15,10 @@ public class JwtService
         _config = config;
     }
 
-    public string GenerateToken(string username, string? role)
+    // patientId y dni son opcionales porque el token de administrador no los lleva. El módulo de
+    // Citas (Fase 2) los necesita para saber qué paciente está haciendo el pedido sin volver a la
+    // base en cada request.
+    public string GenerateToken(string username, string? role, Guid? patientId = null, string? dni = null)
     {
         if (_config == null) throw new ArgumentNullException();
         var jwtConfig = _config.GetSection("Jwt");
@@ -25,12 +29,15 @@ public class JwtService
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expiresIn = int.Parse(jwtConfig["ExpiresInMinutes"] ?? "60");
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, username),
-            new Claim(ClaimTypes.Name, username),
-            new Claim(ClaimTypes.Role, role ?? string.Empty)
+            new(JwtRegisteredClaimNames.Sub, username),
+            new(ClaimTypes.Name, username),
+            new(ClaimTypes.Role, role ?? string.Empty)
         };
+
+        if (patientId.HasValue) claims.Add(new Claim(CustomClaims.PatientId, patientId.Value.ToString()));
+        if (!string.IsNullOrWhiteSpace(dni)) claims.Add(new Claim(CustomClaims.Dni, dni));
 
         var token = new JwtSecurityToken(
             issuer: issuer,
