@@ -1,8 +1,10 @@
 ﻿using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
+using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
-
+using Microsoft.Data.SqlClient;
 namespace Dsw2026Tpi.Data;
 
 public class PersistenceEf: IPersistence
@@ -19,9 +21,23 @@ public class PersistenceEf: IPersistence
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         await _context.AddAsync(entity);
-        await _context.SaveChangesAsync();
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            throw new ConflictException(nameof(ErrorCodes.UNIQUE_CONSTRAINT_VIOLATION),
+                ErrorCodes.UNIQUE_CONSTRAINT_VIOLATION);
+        }
         return entity;
     }
+
+    // 2601: clave duplicada en índice único
+    // 2627: violación de restricción UNIQUE
+    private static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is SqlException { Number: 2601 or 2627 };
 
     public async Task<T> Delete<T>(T entity) where T : EntityBase
     {
