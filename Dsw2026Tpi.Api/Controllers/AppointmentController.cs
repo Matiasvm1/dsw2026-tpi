@@ -8,7 +8,7 @@ namespace Dsw2026Tpi.Api.Controllers;
 [Authorize] // Paciente o Administrador
 public class AppointmentController : AppController
 {
-    private readonly IAppointmentService _service;
+    private readonly IAppointmentService _service;    
     public AppointmentController(IAppointmentService service) => _service = service;
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
@@ -19,4 +19,13 @@ public class AppointmentController : AppController
         
         return Created($"/api/appointments/{response.Id}", response);
     }
+
+    [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        await _service.Cancel(id, User);
+        return NoContent();
+    }
+
 }

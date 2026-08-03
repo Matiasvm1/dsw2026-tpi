@@ -26,7 +26,7 @@ public class AppointmentService : IAppointmentService
     public async Task<AppointmentModel.Response> Book(AppointmentModel.Request request, ClaimsPrincipal user)
     {
         var dniClaim = user.FindFirstValue(CustomClaims.Dni);
-        // 2. Validaciones básicas (Pasos 1 y 2 del documento)
+        // 2. Validaciones básicas 
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 5)
             throw new ValidationException(nameof(ErrorCodes.APPOINTMENT_REASON_LENGTH), ErrorCodes.APPOINTMENT_REASON_LENGTH)
                 .WithDetail("reason", "min_length_5");
@@ -40,7 +40,7 @@ public class AppointmentService : IAppointmentService
                 .WithDetail("dni", "length_between_7_and_10");
         }
 
-        // 3. Validación de identidad (Paso 3)
+        // 3. Validación de identidad 
         // Si es PACIENTE, su DNI del body tiene que coincidir exactamente con el de su token
         if (user.IsInRole(Roles.Patient) && (dniClaim is null || dniString != dniClaim))
         {
@@ -157,8 +157,39 @@ public class AppointmentService : IAppointmentService
 
 
     }
-    public Task Cancel(Guid appointmentId, ClaimsPrincipal user) //Metodo temporal para que compile
+    public async Task Cancel(Guid appointmentId, ClaimsPrincipal user)
     {
-        throw new NotImplementedException();
+        // 1. Extraemos los claims
+        var role = user.FindFirstValue(ClaimTypes.Role);
+        var patientIdClaim = user.FindFirstValue("patientId");
+
+        // 2. Buscar el Appointment con el include del slot 
+        var appointment = await _persistence.GetById<Appointment>(appointmentId, nameof(Appointment.AvailabilitySlot));
+        
+        if (appointment is null)
+            throw new EntityNotFoundException(nameof(ErrorCodes.APPOINTMENT_NOT_FOUND), ErrorCodes.APPOINTMENT_NOT_FOUND);
+
+        // 3. Validación de identidad 
+        // Si es PACIENTE, el turno debe pertenecer a su ID
+        if (role == Roles.PatientResponse)
+        {
+            if (patientIdClaim == null || appointment.PatientId.ToString() != patientIdClaim)
+                throw new BusinessRuleException(nameof(ErrorCodes.APPOINTMENT_FORBIDDEN), ErrorCodes.APPOINTMENT_FORBIDDEN);
+        }
+
+        // 4. El estado debe ser BOOKED 
+        if (appointment.Status != AppointmentStatus.Booked)
+            throw new BusinessRuleException(nameof(ErrorCodes.APPOINTMENT_NOT_CANCELLABLE), ErrorCodes.APPOINTMENT_NOT_CANCELLABLE);
+
+        // 5. Cambios de estado 
+        appointment.Cancel(); // Status = CANCELLED + CancelledAt
+        appointment.AvailabilitySlot!.Release(); // El slot vuelve a AVAILABLE
+
+        // 6. Guardar en base de datos 
+        await _persistence.Update(appointment);
+        await _persistence.Update(appointment.AvailabilitySlot);
+
+        // 7. Loguear la cancelación
+        // _logger.LogInformation("El turno {AppointmentId} fue cancelado exitosamente.", appointmentId);
     }
 }
