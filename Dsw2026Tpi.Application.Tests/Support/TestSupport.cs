@@ -27,10 +27,10 @@ public static class Nav
 /// </summary>
 public static class TestData
 {
-    public static Speciality Speciality(string name = "Cardiologia", Guid? id = null) =>
+    public static Speciality MakeSpeciality(string name = "Cardiologia", Guid? id = null) =>
         new(name, "Especialidad del corazon", id);
 
-    public static Doctor Doctor(Guid specialityId, Speciality? speciality = null,
+    public static Doctor MakeDoctor(Guid specialityId, Speciality? speciality = null,
         string name = "Dr House", Guid? id = null)
     {
         var doctor = new Doctor(name, "MP12345", specialityId, id);
@@ -38,10 +38,10 @@ public static class TestData
         return doctor;
     }
 
-    public static Patient Patient(string dni = "12345678", string? fullName = null, Guid? id = null) =>
+    public static Patient MakePatient(string dni = "12345678", string? fullName = null, Guid? id = null) =>
         new("user-" + dni, dni, fullName, id);
 
-    public static AvailabilityRule Rule(Guid doctorId, Doctor? doctor = null,
+    public static AvailabilityRule MakeRule(Guid doctorId, Doctor? doctor = null,
         DayOfWeek day = DayOfWeek.Tuesday, Guid? id = null)
     {
         var rule = new AvailabilityRule(doctorId, 2026, 8, day,
@@ -53,7 +53,7 @@ public static class TestData
     /// <summary>
     /// Slot disponible y por defecto FUTURO (mañana 09:00), para no chocar con RN04.
     /// </summary>
-    public static AvailabilitySlot Slot(Guid doctorId, AvailabilityRule? rule = null,
+    public static AvailabilitySlot MakeSlot(Guid doctorId, AvailabilityRule? rule = null,
         DateOnly? date = null, TimeOnly? start = null, SlotStatus status = SlotStatus.Available,
         Guid? id = null)
     {
@@ -71,13 +71,13 @@ public static class TestData
     /// Turno con TODO el grafo poblado (slot -> rule -> doctor -> speciality, y patient), tal como
     /// llegaría de un GetFiltered/Paginate con el FullGraph. Para probar el mapeo del Par B.
     /// </summary>
-    public static Appointment BookedAppointment(
+    public static Appointment MakeBookedAppointment(
         Patient patient, Doctor doctor, Speciality speciality,
         DateOnly? date = null, TimeOnly? start = null, string reason = "consulta general",
         Guid? id = null)
     {
-        var rule = Rule(doctor.Id, doctor);
-        var slot = Slot(doctor.Id, rule, date, start);
+        var rule = MakeRule(doctor.Id, doctor);
+        var slot = MakeSlot(doctor.Id, rule, date, start);
         var appt = new Appointment(slot.Id, patient.Id, reason, id);
         Nav.Set(appt, nameof(Appointment.AvailabilitySlot), slot);
         Nav.Set(appt, nameof(Appointment.Patient), patient);
