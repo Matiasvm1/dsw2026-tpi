@@ -21,6 +21,7 @@ public static class DependencyInjectionConfigurationExtensions
         services.AddScoped<ISpecialityService, SpecialityService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
         services.AddScoped<IAppointmentQueryService, AppointmentQueryService>();
+        services.AddScoped<IAppointmentService, AppointmentService>();
         return services;
     }
 
