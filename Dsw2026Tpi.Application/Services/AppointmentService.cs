@@ -160,8 +160,7 @@ public class AppointmentService : IAppointmentService
     public async Task Cancel(Guid appointmentId, ClaimsPrincipal user)
     {
         // 1. Extraemos los claims
-        var role = user.FindFirstValue(ClaimTypes.Role);
-        var patientIdClaim = user.FindFirstValue("patientId");
+        var patientIdClaim = user.FindFirstValue(CustomClaims.PatientId);
 
         // 2. Buscar el Appointment con el include del slot 
         var appointment = await _persistence.GetById<Appointment>(appointmentId, nameof(Appointment.AvailabilitySlot));
@@ -169,12 +168,14 @@ public class AppointmentService : IAppointmentService
         if (appointment is null)
             throw new EntityNotFoundException(nameof(ErrorCodes.APPOINTMENT_NOT_FOUND), ErrorCodes.APPOINTMENT_NOT_FOUND);
 
-        // 3. Validación de identidad 
-        // Si es PACIENTE, el turno debe pertenecer a su ID
-        if (role == Roles.PatientResponse)
+        // 3. Validación de identidad
+        // Si es PACIENTE, el turno debe pertenecer a su ID. Se compara contra el rol interno
+        // (Roles.Patient = "Paciente"), igual que Book(): el claim lleva el nombre interno, no el
+        // de respuesta del contrato. Y un turno ajeno es un 403 (AuthorizationException), no un 409.
+        if (user.IsInRole(Roles.Patient))
         {
             if (patientIdClaim == null || appointment.PatientId.ToString() != patientIdClaim)
-                throw new BusinessRuleException(nameof(ErrorCodes.APPOINTMENT_FORBIDDEN), ErrorCodes.APPOINTMENT_FORBIDDEN);
+                throw new AuthorizationException(nameof(ErrorCodes.APPOINTMENT_FORBIDDEN), ErrorCodes.APPOINTMENT_FORBIDDEN);
         }
 
         // 4. El estado debe ser BOOKED 
