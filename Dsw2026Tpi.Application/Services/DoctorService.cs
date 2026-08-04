@@ -60,7 +60,7 @@ public class DoctorService : IDoctorService
         Validate(request);
 
         var speciality = await _persistence.GetById<Speciality>(
-            request.SpecialityId);
+            request.SpecialtyId);
 
         if (speciality is null)
         {
@@ -68,14 +68,14 @@ public class DoctorService : IDoctorService
                     nameof(ErrorCodes.DOCTOR_SPECIALTY_NOT_FOUND),
                     ErrorCodes.DOCTOR_SPECIALTY_NOT_FOUND)
                 .WithDetail(
-                    nameof(request.SpecialityId),
+                    nameof(request.SpecialtyId),
                     "not_found");
         }
 
         var doctor = new Doctor(
             request.Name.Trim(),
             request.LicenseNumber?.Trim(),
-            request.SpecialityId);
+            request.SpecialtyId);
 
         await _persistence.Add(doctor);
 
@@ -98,7 +98,7 @@ public class DoctorService : IDoctorService
             ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
         var speciality = await _persistence.GetById<Speciality>(
-            request.SpecialityId);
+            request.SpecialtyId);
 
         if (speciality is null)
         {
@@ -106,14 +106,14 @@ public class DoctorService : IDoctorService
                     nameof(ErrorCodes.DOCTOR_SPECIALTY_NOT_FOUND),
                     ErrorCodes.DOCTOR_SPECIALTY_NOT_FOUND)
                 .WithDetail(
-                    nameof(request.SpecialityId),
+                    nameof(request.SpecialtyId),
                     "not_found");
         }
 
         doctor.Update(
             request.Name.Trim(),
             request.LicenseNumber?.Trim(),
-            request.SpecialityId);
+            request.SpecialtyId);
 
         await _persistence.Update(doctor);
 
