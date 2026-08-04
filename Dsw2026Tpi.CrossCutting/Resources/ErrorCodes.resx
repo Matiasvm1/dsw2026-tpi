@@ -222,4 +222,7 @@
   <data name="UNIQUE_CONSTRAINT_VIOLATION" xml:space="preserve">
     <value>El registro ya existe</value>
   </data>
+  <data name="ADMIN_PASSWORD_LENGTH" xml:space="preserve">
+    <value>La contraseña debe tener al menos 8 caracteres</value>
+  </data>
 </root>

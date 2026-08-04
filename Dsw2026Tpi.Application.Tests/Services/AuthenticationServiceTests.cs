@@ -71,7 +71,7 @@ public class AuthenticationServiceTests
         _userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
 
         await Assert.ThrowsAsync<AuthenticationException>(
-            () => _sut.LoginAdmin(new LoginAdminModel.Request("admin@system.com", "x")));
+            () => _sut.LoginAdmin(new LoginAdminModel.Request("admin@system.com", "wrongpass")));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class AuthenticationServiceTests
         _signIn.Setup(s => s.CheckPassword(It.IsAny<ApplicationUser>(), It.IsAny<string>())).ReturnsAsync(false);
 
         await Assert.ThrowsAsync<AuthenticationException>(
-            () => _sut.LoginAdmin(new LoginAdminModel.Request("admin@system.com", "mala")));
+            () => _sut.LoginAdmin(new LoginAdminModel.Request("admin@system.com", "wrongpass")));
     }
 
     [Fact]
@@ -96,6 +96,15 @@ public class AuthenticationServiceTests
 
         Assert.False(string.IsNullOrWhiteSpace(result.Token));
         Assert.Equal(Roles.AdministratorResponse, result.Role); // "ADMINISTRADOR"
+    }
+
+    [Fact]
+    public async Task LoginAdmin_PasswordCorta_LanzaValidationException()
+    {
+        // Email válido: llega a la validación de largo de contraseña (mínimo 8) antes del auth.
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.LoginAdmin(new LoginAdminModel.Request("admin@system.com", "corta")));
+        Assert.Equal(nameof(ErrorCodes.ADMIN_PASSWORD_LENGTH), ex.Error.ErrorCode);
     }
 
     // ---------------------------------------------------------------- LoginPatient

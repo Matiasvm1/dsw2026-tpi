@@ -15,7 +15,7 @@ namespace Dsw2026Tpi.Application.Services;
 public class AuthenticationService : IAuthenticationService
 {
     private const int DniMinLength = 7;
-    private const int DniMaxLength = 10;
+    private const int DniMaxLength = 8; // Contrato: el login de paciente admite DNI de 7 u 8 dígitos.
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ISignInService _signInManager;
@@ -42,6 +42,15 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
         if (!request.Email.IsEmailValid()) throw new AuthenticationException();
+
+        // Contrato del login de admin: password obligatorio y de al menos 8 caracteres. Es una
+        // validación de entrada (400), independiente de si la credencial es correcta o no.
+        if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
+            throw new ValidationException(
+                    nameof(ErrorCodes.ADMIN_PASSWORD_LENGTH),
+                    ErrorCodes.ADMIN_PASSWORD_LENGTH)
+                .WithDetail("password", "min_length_8");
+
         var user = await _userManager.FindByEmailAsync(request.Email) ?? throw new AuthenticationException();
         var result = await _signInManager.CheckPassword(user, request.Password);
 

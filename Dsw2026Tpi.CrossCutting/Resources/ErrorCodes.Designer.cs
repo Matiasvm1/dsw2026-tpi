@@ -374,5 +374,14 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("VALIDATION_ERROR", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a La contraseña debe tener al menos 8 caracteres.
+        /// </summary>
+        public static string ADMIN_PASSWORD_LENGTH {
+            get {
+                return ResourceManager.GetString("ADMIN_PASSWORD_LENGTH", resourceCulture);
+            }
+        }
     }
 }
