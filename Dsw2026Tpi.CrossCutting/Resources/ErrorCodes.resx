@@ -225,4 +225,7 @@
   <data name="ADMIN_PASSWORD_LENGTH" xml:space="preserve">
     <value>La contraseña debe tener al menos 8 caracteres</value>
   </data>
+  <data name="RATE_LIMIT_EXCEEDED" xml:space="preserve">
+    <value>Demasiadas solicitudes. Intente nuevamente en unos instantes</value>
+  </data>
 </root>
