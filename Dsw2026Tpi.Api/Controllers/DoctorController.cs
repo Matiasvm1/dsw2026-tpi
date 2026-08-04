@@ -52,11 +52,12 @@ public class DoctorController : AppController
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Delete(Guid id)
     {
         await _service.Delete(id);
-        return NoContent();
+        // El TFI pide devolver 200 con el texto "ok" en la baja logica.
+        return Ok("ok");
     }
 
     [HttpGet("{id:guid}/availabilities")]

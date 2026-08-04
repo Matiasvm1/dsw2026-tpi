@@ -3,7 +3,7 @@ namespace Dsw2026Tpi.Application.Dtos;
 public record AppointmentModel
 {
     // ---- entrada ----
-    public record Request(Guid DoctorId, Guid AvailabilityId, PatientRequest Patient, string Reason);
+    public record Request(Guid DoctorId, Guid AvailabilitySlotId, PatientRequest Patient, string Reason);
     public record PatientRequest(long Dni);
 
     // ---- salida ----
@@ -20,13 +20,19 @@ public record AppointmentModel
         SpecialtyDto Specialty,
         PatientDto Patient);
 
+    // El search del admin tiene un shape propio (contrato): appointmentsId/appointmentsStatus, el
+    // DNI como número y la especialidad ANIDADA dentro del médico. Por eso no reutiliza los DTOs de
+    // la Response general.
     public record SearchResponse(
-        Guid Id,
-        SpecialtyDto Specialty,
-        DoctorDto Doctor,
-        string AvailableTime,   // "yyyy-MM-dd HH:mm"
-        string Status,
-        PatientDto Patient);
+        Guid AppointmentsId,
+        string AppointmentsStatus,
+        SearchPatientDto Patient,
+        SearchDoctorDto Doctor,
+        string AvailableTime);   // "yyyy-MM-dd HH:mm" (tabla lógica del admin)
+
+    public record SearchPatientDto(long Dni, string? FullName);
+    public record SearchDoctorDto(Guid DoctorId, string Name, SearchSpecialtyDto Specialty);
+    public record SearchSpecialtyDto(Guid SpecialtyId, string Name);
 
     public record DoctorDto(Guid Id, string Name);
     public record SpecialtyDto(Guid Id, string Name);

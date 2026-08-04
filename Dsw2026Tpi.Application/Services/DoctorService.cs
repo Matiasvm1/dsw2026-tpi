@@ -156,6 +156,7 @@ public class DoctorService : IDoctorService
                     : (int)rule.DayOfWeek)
             .ThenBy(rule => rule.StartTime)
             .Select(rule => new DoctorModel.AvailabilityResponse(
+                rule.Id,
                 DayOfWeekMapper.ToSpanish(rule.DayOfWeek),
                 rule.StartTime.ToString("HH\\:mm"),
                 rule.EndTime.ToString("HH\\:mm")));

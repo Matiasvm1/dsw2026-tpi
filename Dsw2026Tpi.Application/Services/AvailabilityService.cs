@@ -43,13 +43,14 @@ public class AvailabilityService : IAvailabilityService
 
         var rulesCreated = 0;
         var slotsCreated = 0;
+        var effectiveRules = new List<AvailabilityRule>();
 
         foreach (var dayReq in parsedDays)
         {
             var rule = new AvailabilityRule(request.DoctorId, (short)currentYear, (byte)currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
-            // var rule = new AvailabilityRule(request.DoctorId, currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
             await _persistence.Add(rule);
             rulesCreated++;
+            effectiveRules.Add(rule);
 
             var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays);
             foreach (var slot in slots)
@@ -64,7 +65,7 @@ public class AvailabilityService : IAvailabilityService
             "Disponibilidad generada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
             request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
 
-        return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
+        return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
     public async Task<AvailabilityModel.Response> Update(AvailabilityModel.Request request)
@@ -76,51 +77,71 @@ public class AvailabilityService : IAvailabilityService
         var currentYear = now.Year;
         var currentMonth = now.Month;
 
-        var existingRules = await _persistence.GetFiltered<AvailabilityRule>(
-            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? [];
+        var existingRules = (await _persistence.GetFiltered<AvailabilityRule>(
+            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? []).ToList();
 
-        if (existingRules.Any())
+        var existingSlots = new List<AvailabilitySlot>();
+        if (existingRules.Count > 0)
         {
             var ruleIds = existingRules.Select(r => r.Id).ToList();
-            var existingSlots = await _persistence.GetFiltered<AvailabilitySlot>(s => ruleIds.Contains(s.AvailabilityRuleId)) ?? [];
-            var slotIds = existingSlots.Select(s => s.Id).ToList();
-
-            var hasBookedAppointments = await _persistence.First<Appointment>(
-                a => slotIds.Contains(a.AvailabilitySlotId) && a.Status == AppointmentStatus.Booked);
-
-            if (hasBookedAppointments is not null)
-            {
-                throw new ConflictException(
-                    nameof(ErrorCodes.AVAILABILITY_HAS_BOOKED_APPOINTMENTS),
-                    ErrorCodes.AVAILABILITY_HAS_BOOKED_APPOINTMENTS);
-            }
-
-            // Los slots se dan de baja antes que sus reglas: el filtro global de baja lógica
-            // trabaja entidad por entidad y no cascadea, así que borrar sólo la regla dejaría los
-            // turnos viejos visibles y el mes quedaría con los de antes más los nuevos.
-            foreach (var slot in existingSlots)
-            {
-                await _persistence.Delete(slot);
-            }
-
-            foreach (var rule in existingRules)
-            {
-                await _persistence.Delete(rule);
-            }
+            existingSlots = (await _persistence.GetFiltered<AvailabilitySlot>(
+                s => ruleIds.Contains(s.AvailabilityRuleId)) ?? []).ToList();
         }
+
+        // AVL-11: el PUT sobreescribe SOLO la disponibilidad NO reservada futura. Un slot reservado
+        // (Booked) o pasado se conserva; los libres futuros se dan de baja para regenerarlos.
+        var survivingSlots = new List<AvailabilitySlot>();
+        foreach (var slot in existingSlots)
+        {
+            var isFuture = slot.SlotDate.ToDateTime(slot.StartTime) > now;
+            if (slot.Status == SlotStatus.Booked || !isFuture)
+                survivingSlots.Add(slot);
+            else
+                await _persistence.Delete(slot);
+        }
+
+        // Una regla se da de baja solo si no le queda ningún slot vivo. Si todavía sostiene un turno
+        // reservado hay que conservarla: el filtro global de baja lógica la ocultaría y el grafo del
+        // turno (slot -> regla -> médico) se rompería, dejando al paciente sin médico en su turno.
+        var ruleIdsWithSurvivors = survivingSlots.Select(s => s.AvailabilityRuleId).ToHashSet();
+        var keptRules = new List<AvailabilityRule>();
+        foreach (var rule in existingRules)
+        {
+            if (ruleIdsWithSurvivors.Contains(rule.Id))
+                keptRules.Add(rule);
+            else
+                await _persistence.Delete(rule);
+        }
+
+        // (fecha, hora) ya ocupadas por un slot vivo: la regeneración las saltea para no chocar con
+        // el índice único (DoctorId, SlotDate, StartTime) filtrado por Deleted = 0.
+        var occupied = survivingSlots.Select(s => (s.SlotDate, s.StartTime)).ToHashSet();
 
         var nonWorkingDays = GetNonWorkingDays();
         var rulesCreated = 0;
         var slotsCreated = 0;
+        var effectiveRules = new List<AvailabilityRule>();
 
         foreach (var dayReq in parsedDays)
         {
-            var rule = new AvailabilityRule(request.DoctorId, (short)currentYear, (byte)currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
-            // var rule = new AvailabilityRule(request.DoctorId, currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
-            await _persistence.Add(rule);
-            rulesCreated++;
+            // Si una regla conservada coincide exactamente (día y horario) se reutiliza: crear otra
+            // idéntica no borrada rompería el índice único de reglas.
+            var rule = keptRules.FirstOrDefault(r =>
+                r.DayOfWeek == dayReq.DayOfWeek &&
+                r.StartTime == dayReq.StartTime &&
+                r.EndTime == dayReq.EndTime);
 
-            var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays);
+            if (rule is null)
+            {
+                rule = new AvailabilityRule(request.DoctorId, (short)currentYear, (byte)currentMonth,
+                    dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
+                await _persistence.Add(rule);
+                rulesCreated++;
+            }
+
+            effectiveRules.Add(rule);
+
+            var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays, occupied);
             foreach (var slot in slots)
             {
                 await _persistence.Add(slot);
@@ -130,13 +151,30 @@ public class AvailabilityService : IAvailabilityService
 
         // D08: la regeneración de disponibilidad tampoco es un CRUD, se audita.
         _logger.LogInformation(
-            "Disponibilidad reemplazada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
-            request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
+            "Disponibilidad actualizada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas nuevas y {SlotsCreated} turnos, conservando {Preserved} reservados/pasados",
+            request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated, survivingSlots.Count);
 
-        return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
+        return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
     #region Helpers & Validations
+
+    // Arma el response con el schedule en efecto (una fila por día, ordenado Lunes->Domingo),
+    // en el mismo formato que GET /doctors/{id}/availabilities.
+    private static AvailabilityModel.Response BuildResponse(
+        Guid doctorId, int year, int month, IEnumerable<AvailabilityRule> rules)
+    {
+        var days = rules
+            .OrderBy(r => r.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)r.DayOfWeek)
+            .ThenBy(r => r.StartTime)
+            .Select(r => new AvailabilityModel.DayResponse(
+                DayOfWeekMapper.ToSpanish(r.DayOfWeek),
+                r.StartTime.ToString("HH\\:mm"),
+                r.EndTime.ToString("HH\\:mm")))
+            .ToList();
+
+        return new AvailabilityModel.Response(doctorId, year, month, days);
+    }
 
     private async Task ValidateDoctorAndDays(AvailabilityModel.Request request)
     {
@@ -205,7 +243,8 @@ public class AvailabilityService : IAvailabilityService
     }
 
     private static IEnumerable<AvailabilitySlot> GenerateSlots(
-        AvailabilityRule rule, DateOnly from, DateTime nowUtc, IReadOnlySet<DateOnly> nonWorkingDays)
+        AvailabilityRule rule, DateOnly from, DateTime nowUtc, IReadOnlySet<DateOnly> nonWorkingDays,
+        IReadOnlySet<(DateOnly Date, TimeOnly Start)>? occupied = null)
     {
         var lastDay = DateTime.DaysInMonth(rule.Year, rule.Month);
         var slots = new List<AvailabilitySlot>();
@@ -222,6 +261,9 @@ public class AvailabilityService : IAvailabilityService
                 var end = start.AddMinutes(30);
 
                 if (date.ToDateTime(start) <= nowUtc) continue;
+
+                // No regenerar un horario que ya sostiene un slot vivo (reservado o pasado).
+                if (occupied is not null && occupied.Contains((date, start))) continue;
 
                 slots.Add(new AvailabilitySlot(rule.Id, rule.DoctorId, date, start, end));
             }
