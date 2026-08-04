@@ -374,5 +374,14 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("VALIDATION_ERROR", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Demasiadas solicitudes. Intente nuevamente en unos instantes.
+        /// </summary>
+        public static string RATE_LIMIT_EXCEEDED {
+            get {
+                return ResourceManager.GetString("RATE_LIMIT_EXCEEDED", resourceCulture);
+            }
+        }
     }
 }

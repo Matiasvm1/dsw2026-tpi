@@ -222,4 +222,7 @@
   <data name="UNIQUE_CONSTRAINT_VIOLATION" xml:space="preserve">
     <value>El registro ya existe</value>
   </data>
+  <data name="RATE_LIMIT_EXCEEDED" xml:space="preserve">
+    <value>Demasiadas solicitudes. Intente nuevamente en unos instantes</value>
+  </data>
 </root>

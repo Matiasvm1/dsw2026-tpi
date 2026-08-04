@@ -30,6 +30,7 @@ public class Program
             builder.Services.AddAppCors(builder.Configuration);
             builder.Services.AddAppDependencies();
             builder.Services.AddAppControllers();
+            builder.Services.AddAppRateLimiting(builder.Configuration);
             builder.Services.AddHealthChecks();
 
             var app = builder.Build();
@@ -64,6 +65,10 @@ public class Program
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseCors();
+
+            // Despues de UseAuthentication: la politica Booking particiona por el claim patientId,
+            // que recien esta disponible en User una vez que corrio la autenticacion.
+            app.UseRateLimiter();
 
             app.MapControllers();
             app.MapHealthChecks("/health-check");
