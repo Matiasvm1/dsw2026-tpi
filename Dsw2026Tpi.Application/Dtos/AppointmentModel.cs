@@ -3,7 +3,7 @@ namespace Dsw2026Tpi.Application.Dtos;
 public record AppointmentModel
 {
     // ---- entrada ----
-    public record Request(Guid DoctorId, Guid AvailabilityId, PatientRequest Patient, string Reason);
+    public record Request(Guid DoctorId, Guid AvailabilitySlotId, PatientRequest Patient, string Reason);
     public record PatientRequest(long Dni);
 
     // ---- salida ----

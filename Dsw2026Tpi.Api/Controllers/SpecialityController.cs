@@ -57,11 +57,11 @@ public class SpecialityController : AppController // Heredamos de AppController 
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Delete(Guid id)
     {
         await _service.Delete(id);
-        // Devuelve 204 (No Content) porque el borrado fue exitoso pero no hay datos para devolverle a la pantalla
-        return NoContent();
+        // El TFI pide devolver 200 con el texto "ok" en la baja logica.
+        return Ok("ok");
     }
 }

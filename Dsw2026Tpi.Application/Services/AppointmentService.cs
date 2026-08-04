@@ -66,7 +66,7 @@ public class AppointmentService : IAppointmentService
 
         // 6. Buscar el bloque horario concreto
         var slot = await _persistence.GetById<AvailabilitySlot>(
-            request.AvailabilityId)
+            request.AvailabilitySlotId)
             ?? throw new EntityNotFoundException(
                 nameof(ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND),
                 ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND);
