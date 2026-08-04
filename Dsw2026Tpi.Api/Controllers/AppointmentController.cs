@@ -25,11 +25,12 @@ public class AppointmentController : AppController
     }
 
     [HttpDelete("{id}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel(Guid id)
     {
         await _service.Cancel(id, User);
-        return NoContent();
+        // El TFI pide devolver 200 con el texto "ok" al cancelar.
+        return Ok("ok");
     }
 
 }
