@@ -1,4 +1,5 @@
 using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.Data.Extensions;
 using Dsw2026Tpi.Data.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -10,16 +11,16 @@ public static class SeedConfigurationExtensions
     {
         using var scope = app.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
-        // Red de contención: si por algún motivo los roles no están, se crean acá.
-        // Es idempotente, así que no molesta cuando ya existen.
-        foreach (var role in new[] { Roles.Administrator, Roles.Patient })
-        {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole(role));
-        }
+        // Los roles salen de Sources/roles.json, que es la unica fuente: asi los identificadores
+        // son los mismos en todas las maquinas del equipo. Seedwork es idempotente (no hace nada si
+        // ya hay roles cargados).
+        // Tiene que correr ACA y no alcanza con el UseSeeding del DbContext: ese delegado solo se
+        // dispara desde Migrate/EnsureCreated, que nadie llama al arrancar la API. Sin esto, el
+        // AddToRoleAsync de mas abajo no encuentra el rol y el admin queda sin permisos.
+        var authenticationDb = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        authenticationDb.Seedwork<IdentityRole>("Sources/roles.json");
 
         var email = configuration["SeedAdmin:Email"]
             ?? throw new InvalidOperationException("Falta la configuración SeedAdmin:Email");

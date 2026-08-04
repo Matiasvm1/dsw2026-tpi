@@ -87,9 +87,7 @@ Si usás otra instancia de SQL Server, cambiá ese valor.
 
 > **Importante:** la cadena de conexión, la clave del JWT y las credenciales del admin
 > semilla están definidas **únicamente** en `appsettings.Development.json`. La aplicación
-> debe ejecutarse con `ASPNETCORE_ENVIRONMENT=Development` (es lo que hacen los perfiles
-> de `launchSettings.json`). Fuera de ese entorno no hay cadena de conexión configurada
-> y además Swagger no se monta.
+> debe ejecutarse con `ASPNETCORE_ENVIRONMENT=Development`. Fuera de ese entorno no hay cadena de conexión configurada y además Swagger no se monta.
 
 ### 3. Aplicar las migraciones
 
@@ -105,8 +103,14 @@ dotnet ef database update --context AuthenticationDbContext --project Dsw2026Tpi
 dotnet ef database update --context Dsw2026TpiDbContext --project Dsw2026Tpi.Data --startup-project Dsw2026Tpi.Api
 ```
 
-Los roles (`Administrador`, `Paciente`) se siembran automáticamente desde
-`Dsw2026Tpi.Data/Sources/roles.json` al iniciar la aplicación.
+Los roles (`Administrador`, `Paciente`) se siembran desde
+`Dsw2026Tpi.Data/Sources/roles.json`, que es la **única fuente**: los identificadores son
+fijos, así que quedan iguales en todas las máquinas del equipo. El archivo se aplica por
+dos caminos, ambos idempotentes:
+
+- al correr `dotnet ef database update` (mediante `UseSeeding` del `AuthenticationDbContext`);
+- al iniciar la aplicación, antes de crear el usuario administrador —que necesita que el rol
+  ya exista para poder asignárselo.
 
 ### 4. Ejecutar
 
@@ -213,7 +217,7 @@ Leyenda de acceso: 🔓 público · 🔑 autenticado (cualquier rol) · 👤 sol
 ```
 
 **`POST /api/auth/patient/login`** — el `dni` es numérico, de 7 u 8 dígitos. Si el
-paciente no existe se registra automáticamente (RN06).
+paciente no existe se registra automáticamente.
 
 ```jsonc
 // request
