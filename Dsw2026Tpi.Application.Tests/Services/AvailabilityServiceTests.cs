@@ -137,7 +137,7 @@ public class AvailabilityServiceTests
 
         var result = await _sut.Create(Req(Guid.NewGuid(), ("MARTES", "09:00", "12:00")));
 
-        Assert.Equal(1, result.RulesCreated);
+        Assert.Single(result.Days); // devuelve el schedule creado (1 día)
         _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Once);
     }
 
@@ -172,6 +172,6 @@ public class AvailabilityServiceTests
         _persistence.Verify(p => p.Delete(free), Times.Once);                      // libre futuro: reemplazado
         _persistence.Verify(p => p.Delete(It.IsAny<AvailabilityRule>()), Times.Never); // regla con reserva: conservada
         _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Never);    // regla idéntica: reutilizada
-        Assert.Equal(0, result.RulesCreated);
+        Assert.Single(result.Days); // el schedule en efecto sigue siendo el MARTES 09-12 reutilizado
     }
 }

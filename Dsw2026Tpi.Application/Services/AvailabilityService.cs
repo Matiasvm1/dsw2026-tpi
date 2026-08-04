@@ -43,13 +43,14 @@ public class AvailabilityService : IAvailabilityService
 
         var rulesCreated = 0;
         var slotsCreated = 0;
+        var effectiveRules = new List<AvailabilityRule>();
 
         foreach (var dayReq in parsedDays)
         {
             var rule = new AvailabilityRule(request.DoctorId, (short)currentYear, (byte)currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
-            // var rule = new AvailabilityRule(request.DoctorId, currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
             await _persistence.Add(rule);
             rulesCreated++;
+            effectiveRules.Add(rule);
 
             var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays);
             foreach (var slot in slots)
@@ -64,7 +65,7 @@ public class AvailabilityService : IAvailabilityService
             "Disponibilidad generada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
             request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
 
-        return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
+        return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
     public async Task<AvailabilityModel.Response> Update(AvailabilityModel.Request request)
@@ -119,6 +120,7 @@ public class AvailabilityService : IAvailabilityService
         var nonWorkingDays = GetNonWorkingDays();
         var rulesCreated = 0;
         var slotsCreated = 0;
+        var effectiveRules = new List<AvailabilityRule>();
 
         foreach (var dayReq in parsedDays)
         {
@@ -137,6 +139,8 @@ public class AvailabilityService : IAvailabilityService
                 rulesCreated++;
             }
 
+            effectiveRules.Add(rule);
+
             var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays, occupied);
             foreach (var slot in slots)
             {
@@ -150,10 +154,27 @@ public class AvailabilityService : IAvailabilityService
             "Disponibilidad actualizada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas nuevas y {SlotsCreated} turnos, conservando {Preserved} reservados/pasados",
             request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated, survivingSlots.Count);
 
-        return new AvailabilityModel.Response(request.DoctorId, currentYear, currentMonth, rulesCreated, slotsCreated);
+        return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
     #region Helpers & Validations
+
+    // Arma el response con el schedule en efecto (una fila por día, ordenado Lunes->Domingo),
+    // en el mismo formato que GET /doctors/{id}/availabilities.
+    private static AvailabilityModel.Response BuildResponse(
+        Guid doctorId, int year, int month, IEnumerable<AvailabilityRule> rules)
+    {
+        var days = rules
+            .OrderBy(r => r.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)r.DayOfWeek)
+            .ThenBy(r => r.StartTime)
+            .Select(r => new AvailabilityModel.DayResponse(
+                DayOfWeekMapper.ToSpanish(r.DayOfWeek),
+                r.StartTime.ToString("HH\\:mm"),
+                r.EndTime.ToString("HH\\:mm")))
+            .ToList();
+
+        return new AvailabilityModel.Response(doctorId, year, month, days);
+    }
 
     private async Task ValidateDoctorAndDays(AvailabilityModel.Request request)
     {

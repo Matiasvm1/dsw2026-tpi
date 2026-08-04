@@ -39,6 +39,10 @@ public class JwtService
         if (patientId.HasValue) claims.Add(new Claim(CustomClaims.PatientId, patientId.Value.ToString()));
         if (!string.IsNullOrWhiteSpace(dni)) claims.Add(new Claim(CustomClaims.Dni, dni));
 
+        // SEC-07: el token lleva expiración corta ("expiración adecuada" del TFI). La revocación
+        // explícita (invalidar un token todavía vigente) queda FUERA DE SCOPE: requeriría una
+        // denylist server-side y un endpoint de logout/revoke que el TFI no define entre sus
+        // endpoints. La expiración acota la ventana de un token comprometido.
         var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,
