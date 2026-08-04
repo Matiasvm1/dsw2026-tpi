@@ -191,6 +191,6 @@ public class AppointmentService : IAppointmentService
         await _persistence.Update(appointment.AvailabilitySlot);
 
         // 7. Loguear la cancelación
-        // _logger.LogInformation("El turno {AppointmentId} fue cancelado exitosamente.", appointmentId);
+        _logger.LogInformation("El turno {AppointmentId} fue cancelado exitosamente.", appointmentId);
     }
 }
