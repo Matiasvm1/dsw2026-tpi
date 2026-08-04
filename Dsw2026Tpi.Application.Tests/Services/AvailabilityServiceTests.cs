@@ -140,4 +140,38 @@ public class AvailabilityServiceTests
         Assert.Equal(1, result.RulesCreated);
         _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Once);
     }
+
+    private void ExistingSlots(params AvailabilitySlot[] slots) =>
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()))
+            .ReturnsAsync(slots);
+
+    // AVL-11: el PUT sobreescribe la disponibilidad NO reservada futura, pero conserva los turnos
+    // reservados (y la regla que los sostiene) en lugar de rechazar el reemplazo.
+    [Fact]
+    public async Task Update_ConSlotReservado_ConservaElReservadoYReemplazaElLibre()
+    {
+        var doctorId = Guid.NewGuid();
+        DoctorExists();
+
+        var rule = TestData.MakeRule(doctorId, day: DayOfWeek.Tuesday);            // MARTES 09:00-12:00
+        var booked = TestData.MakeSlot(doctorId, rule, start: new TimeOnly(10, 0), status: SlotStatus.Booked);
+        var free = TestData.MakeSlot(doctorId, rule, start: new TimeOnly(9, 0));   // libre y futuro
+
+        ExistingRules(rule);
+        ExistingSlots(booked, free);
+        _persistence.Setup(p => p.Add(It.IsAny<AvailabilityRule>())).ReturnsAsync((AvailabilityRule r) => r);
+        _persistence.Setup(p => p.Add(It.IsAny<AvailabilitySlot>())).ReturnsAsync((AvailabilitySlot s) => s);
+        _persistence.Setup(p => p.Delete(It.IsAny<AvailabilitySlot>())).ReturnsAsync((AvailabilitySlot s) => s);
+        _persistence.Setup(p => p.Delete(It.IsAny<AvailabilityRule>())).ReturnsAsync((AvailabilityRule r) => r);
+
+        // Reconfigura el mismo MARTES 09:00-12:00: no debe reventar por tener un turno reservado.
+        var result = await _sut.Update(Req(doctorId, ("MARTES", "09:00", "12:00")));
+
+        _persistence.Verify(p => p.Delete(booked), Times.Never);                   // reservado: intacto
+        _persistence.Verify(p => p.Delete(free), Times.Once);                      // libre futuro: reemplazado
+        _persistence.Verify(p => p.Delete(It.IsAny<AvailabilityRule>()), Times.Never); // regla con reserva: conservada
+        _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Never);    // regla idéntica: reutilizada
+        Assert.Equal(0, result.RulesCreated);
+    }
 }
