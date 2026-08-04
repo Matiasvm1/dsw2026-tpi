@@ -138,13 +138,18 @@ public class AppointmentQueryService : IAppointmentQueryService
             ? string.Empty
             : $"{slot.SlotDate:yyyy-MM-dd} {slot.StartTime:HH\\:mm}";
 
+        // El contrato del search pide el DNI como número; Patient.Dni se guarda como string.
+        var dni = long.TryParse(patient?.Dni, out var parsedDni) ? parsedDni : 0;
+
         return new AppointmentModel.SearchResponse(
             a.Id,
-            new AppointmentModel.SpecialtyDto(speciality?.Id ?? Guid.Empty, speciality?.Name ?? string.Empty),
-            new AppointmentModel.DoctorDto(doctor?.Id ?? Guid.Empty, doctor?.Name ?? string.Empty),
-            availableTime,
             StatusToResponse(a.Status),
-            new AppointmentModel.PatientDto(patient?.Id ?? Guid.Empty, patient?.Dni ?? string.Empty, patient?.FullName));
+            new AppointmentModel.SearchPatientDto(dni, patient?.FullName),
+            new AppointmentModel.SearchDoctorDto(
+                doctor?.Id ?? Guid.Empty,
+                doctor?.Name ?? string.Empty,
+                new AppointmentModel.SearchSpecialtyDto(speciality?.Id ?? Guid.Empty, speciality?.Name ?? string.Empty)),
+            availableTime);
     }
 
     // El enum del dominio no coincide 1:1 con el contrato (NoShow -> NO_SHOW), así que se mapea a mano.
