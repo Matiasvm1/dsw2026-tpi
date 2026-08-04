@@ -62,9 +62,12 @@ public class Program
                 app.UseSwaggerUI();
             }
 
+            // Antes de UseAuthentication: el preflight OPTIONS viaja sin credenciales, y si lo
+            // atiende primero la autenticacion se rebota con 401 y el navegador nunca manda la
+            // request real.
+            app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseCors();
 
             // Despues de UseAuthentication: la politica Booking particiona por el claim patientId,
             // que recien esta disponible en User una vez que corrio la autenticacion.
