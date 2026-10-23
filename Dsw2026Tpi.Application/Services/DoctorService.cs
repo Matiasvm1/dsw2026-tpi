@@ -57,6 +57,25 @@ public class DoctorService : IDoctorService
              d.Speciality.Name)));
     }
 
+    // Detalle de un médico para el botón "ver" y el formulario de edición del front. Devuelve la
+    // misma forma que cada elemento del listado (TFI p. 16) e incluye la especialidad, porque
+    // sin el Include la navegación llega null y el JSON saldría con "specialty": null.
+    public async Task<DoctorModel.Response> GetById(Guid id)
+    {
+        var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality))
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
+
+        return new DoctorModel.Response(
+            doctor.Id,
+            doctor.Name,
+            doctor.LicenseNumber,
+            doctor.Speciality is null
+                ? null
+                : new DoctorModel.SpecialityDto(
+                    doctor.Speciality.Id,
+                    doctor.Speciality.Name));
+    }
+
     public async Task<DoctorModel.Response> Create(
     DoctorModel.Request request)
     {

@@ -8,6 +8,8 @@ public interface IDoctorService
 {
     Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null, Guid? specialtyId = null);
 
+    Task<DoctorModel.Response> GetById(Guid id);
+
     Task<DoctorModel.Response> Create(DoctorModel.Request request);
 
     Task<DoctorModel.Response> Update(

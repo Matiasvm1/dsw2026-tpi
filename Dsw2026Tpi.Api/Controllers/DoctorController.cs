@@ -26,6 +26,16 @@ public class DoctorController : AppController
         return Ok(doctors);
     }
 
+    // Lo usa el front para el botón "ver" y para recargar el formulario de edición.
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var doctor = await _service.GetById(id);
+        return Ok(doctor);
+    }
+
     [HttpPost]
     [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status201Created)]
