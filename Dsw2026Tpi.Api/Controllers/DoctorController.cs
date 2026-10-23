@@ -72,9 +72,9 @@ public class DoctorController : AppController
 
     [HttpGet("{id:guid}/availabilities")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAvailabilities(Guid id)
+    public async Task<IActionResult> GetAvailabilities(Guid id, [FromQuery] int? year = null, [FromQuery] int? month = null)
     {
-        var availabilities = await _service.GetAvailabilities(id);
+        var availabilities = await _service.GetAvailabilities(id, year, month);
         return Ok(availabilities);
     }
 

@@ -396,6 +396,35 @@ public class DoctorServiceTests
     }
 
     [Fact]
+    public async Task GetAvailabilities_ConAnioYMes_ConsultaLasReglasDeEseMes()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(doctor);
+        Expression<Func<AvailabilityRule, bool>>? captured = null;
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilityRule, bool>>>(), It.IsAny<string[]>()))
+            .Callback<Expression<Func<AvailabilityRule, bool>>, string[]>((predicate, _) => captured = predicate)
+            .ReturnsAsync(Array.Empty<AvailabilityRule>());
+
+        await _sut.GetAvailabilities(doctor.Id, 2026, 8);
+
+        var predicate = captured!.Compile();
+        Assert.True(predicate(TestData.MakeRule(doctor.Id)));      // MakeRule es de 08/2026
+        Assert.False(predicate(new AvailabilityRule(doctor.Id, 2026, 9, DayOfWeek.Tuesday,
+            new TimeOnly(9, 0), new TimeOnly(12, 0))));
+    }
+
+    [Fact]
+    public async Task GetAvailabilities_MesInvalido_Lanza400()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(doctor);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.GetAvailabilities(doctor.Id, 2026, 13));
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
     public async Task GetAvailabilities_DevuelveLasReglasEnEspañol()
     {
         var doctor = TestData.MakeDoctor(Guid.NewGuid());
