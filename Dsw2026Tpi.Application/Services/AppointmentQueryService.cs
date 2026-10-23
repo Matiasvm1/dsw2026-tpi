@@ -72,11 +72,13 @@ public class AppointmentQueryService : IAppointmentQueryService
         return result.Map(MapToResponse);
     }
 
-    // GET /api/appointments/search  ·  admin-only, cuatro filtros opcionales y combinables.
+    // GET /api/appointments/search  ·  admin-only, cinco filtros opcionales y combinables. El estado
+    // usa el mismo parseo que GET /api/appointments?status= para aceptar los mismos valores.
     public async Task<Pagination<AppointmentModel.SearchResponse>> Search(
-        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination)
+        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination, string? status = null)
     {
         var parsedDate = ParseOptionalDate(date);
+        var statusFilter = ParseOptionalStatus(status);
 
         // Patrón "filtro == null || condición", igual que DoctorService.GetAll: EF descarta la
         // condición nula al traducir a SQL. No se arma el IQueryable a mano con ifs.
@@ -86,7 +88,8 @@ public class AppointmentQueryService : IAppointmentQueryService
             a => (specialtyId == null || a.AvailabilitySlot!.AvailabilityRule!.Doctor!.SpecialityId == specialtyId)
               && (doctorId    == null || a.AvailabilitySlot!.AvailabilityRule!.DoctorId == doctorId)
               && (dni         == null || a.Patient!.Dni == dni)
-              && (parsedDate  == null || a.AvailabilitySlot!.SlotDate == parsedDate),
+              && (parsedDate  == null || a.AvailabilitySlot!.SlotDate == parsedDate)
+              && (statusFilter == null || a.Status == statusFilter),
             a => a.AvailabilitySlot!.SlotDate,
             FullGraph);
 

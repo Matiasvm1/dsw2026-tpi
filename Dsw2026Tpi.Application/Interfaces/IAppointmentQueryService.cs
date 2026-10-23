@@ -17,5 +17,5 @@ public interface IAppointmentQueryService
     Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination, string? status = null);
 
     Task<Pagination<AppointmentModel.SearchResponse>> Search(
-        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination);
+        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination, string? status = null);
 }
