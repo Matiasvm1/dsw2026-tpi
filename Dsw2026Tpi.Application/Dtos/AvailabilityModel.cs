@@ -10,4 +10,6 @@ public record AvailabilityModel
     // efecto (los días con su horario), no un conteo.
     public record Response(Guid DoctorId, int Year, int Month, IReadOnlyList<DayResponse> Days);
     public record DayResponse(string Day, string StartTime, string EndTime);
+    // PUT /api/availabilities/slots/{id}/status: bloqueo manual de un horario (BLOCKED | AVAILABLE).
+    public record SlotStatusRequest(string Status);
 }

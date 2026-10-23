@@ -288,4 +288,69 @@ public class AvailabilityServiceTests
         Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
         Assert.Equal(issue, ex.Error.Details.Single().Issue);
     }
+
+    // ---------------------------------------------------------------- Bloqueo manual de slots
+
+    private AvailabilitySlot ArrangeSlot(SlotStatus status)
+    {
+        var slot = TestData.MakeSlot(Guid.NewGuid(), status: status);
+        _persistence.Setup(p => p.GetById<AvailabilitySlot>(slot.Id, It.IsAny<string[]>())).ReturnsAsync(slot);
+        _persistence.Setup(p => p.Update(It.IsAny<AvailabilitySlot>())).ReturnsAsync((AvailabilitySlot s) => s);
+        return slot;
+    }
+
+    [Theory]
+    [InlineData("BOOKED")]
+    [InlineData("LIBRE")]
+    public async Task UpdateSlotStatus_EstadoNoPermitido_Lanza400(string status)
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.UpdateSlotStatus(Guid.NewGuid(), status));
+        Assert.Equal(nameof(ErrorCodes.SLOT_STATUS_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_SlotInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<AvailabilitySlot>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((AvailabilitySlot?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.UpdateSlotStatus(Guid.NewGuid(), "BLOCKED"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_SlotReservado_Lanza409YNoLoModifica()
+    {
+        var slot = ArrangeSlot(SlotStatus.Booked);
+
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.UpdateSlotStatus(slot.Id, "BLOCKED"));
+
+        Assert.Equal(nameof(ErrorCodes.SLOT_BOOKED), ex.Error.ErrorCode);
+        Assert.Equal(SlotStatus.Booked, slot.Status);
+        _persistence.Verify(p => p.Update(It.IsAny<AvailabilitySlot>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_Blocked_BloqueaElSlotYLoDevuelve()
+    {
+        var slot = ArrangeSlot(SlotStatus.Available);
+
+        var result = await _sut.UpdateSlotStatus(slot.Id, "blocked");
+
+        Assert.Equal(SlotStatus.Blocked, slot.Status);
+        Assert.Equal(slot.Id, result.Id);
+        Assert.Equal("BLOCKED", result.Status);
+        _persistence.Verify(p => p.Update(slot), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_Available_DesbloqueaUnSlotBloqueado()
+    {
+        var slot = ArrangeSlot(SlotStatus.Blocked);
+
+        var result = await _sut.UpdateSlotStatus(slot.Id, "AVAILABLE");
+
+        Assert.Equal(SlotStatus.Available, slot.Status);
+        Assert.Equal("AVAILABLE", result.Status);
+    }
 }

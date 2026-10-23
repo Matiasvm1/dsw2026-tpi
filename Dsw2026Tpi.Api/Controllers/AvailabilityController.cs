@@ -30,4 +30,16 @@ public class AvailabilityController : AppController
         var response = await _service.Update(request);
         return Ok(response);
     }
+
+    // PUT /api/availabilities/slots/{id}/status · solo admin (hereda la policy de la clase).
+    [HttpPut("slots/{id:guid}/status")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateSlotStatus(Guid id, [FromBody] AvailabilityModel.SlotStatusRequest request)
+    {
+        var slot = await _service.UpdateSlotStatus(id, request.Status);
+        return Ok(slot);
+    }
 }
