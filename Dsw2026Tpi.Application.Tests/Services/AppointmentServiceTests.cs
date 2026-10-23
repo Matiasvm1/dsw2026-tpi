@@ -310,4 +310,86 @@ public class AppointmentServiceTests
 
         Assert.Equal(AppointmentStatus.Cancelled, turno.Status);
     }
+
+    // ---------------------------------------------------------------- UpdateStatus (asistencia)
+
+    private Appointment ArrangeAppointment(DateOnly date)
+    {
+        var speciality = TestData.MakeSpeciality();
+        var doctor = TestData.MakeDoctor(speciality.Id, speciality);
+        var patient = TestData.MakePatient("12345678");
+        var turno = TestData.MakeBookedAppointment(patient, doctor, speciality, date: date);
+        _persistence.Setup(p => p.GetById<Appointment>(turno.Id, It.IsAny<string[]>())).ReturnsAsync(turno);
+        _persistence.Setup(p => p.Update(It.IsAny<Appointment>())).ReturnsAsync((Appointment a) => a);
+        return turno;
+    }
+
+    private static DateOnly Yesterday => DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+
+    [Theory]
+    [InlineData("CANCELLED")]
+    [InlineData("BOOKED")]
+    [InlineData("COMPLETADO")]
+    public async Task UpdateStatus_EstadoNoPermitido_Lanza400(string status)
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.UpdateStatus(Guid.NewGuid(), status));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_OUTCOME_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_TurnoInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<Appointment>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((Appointment?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.UpdateStatus(Guid.NewGuid(), "ATTENDED"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_TurnoCancelado_Lanza409()
+    {
+        var turno = ArrangeAppointment(Yesterday);
+        turno.Cancel();
+
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.UpdateStatus(turno.Id, "ATTENDED"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_NOT_BOOKED), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_TurnoQueTodaviaNoEmpezo_Lanza409()
+    {
+        var turno = ArrangeAppointment(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)));
+
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.UpdateStatus(turno.Id, "NO_SHOW"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_NOT_STARTED), ex.Error.ErrorCode);
+        Assert.Equal(AppointmentStatus.Booked, turno.Status);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_Attended_MarcaElTurnoYDevuelveLaRespuesta()
+    {
+        var turno = ArrangeAppointment(Yesterday);
+
+        var result = await _sut.UpdateStatus(turno.Id, "ATTENDED");
+
+        Assert.Equal(AppointmentStatus.Attended, turno.Status);
+        Assert.NotNull(turno.AttendedAt);
+        Assert.Equal("ATTENDED", result.Status);
+        Assert.Equal(turno.Id, result.Id);
+        _persistence.Verify(p => p.Update(turno), Times.Once);
+        // El slot no se libera: el horario ya se usó.
+        _persistence.Verify(p => p.Update(It.IsAny<AvailabilitySlot>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_NoShowEnMinusculas_MarcaAusente()
+    {
+        var turno = ArrangeAppointment(Yesterday);
+
+        var result = await _sut.UpdateStatus(turno.Id, "no_show");
+
+        Assert.Equal(AppointmentStatus.NoShow, turno.Status);
+        Assert.Equal("NO_SHOW", result.Status);
+    }
 }

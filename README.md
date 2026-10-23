@@ -387,6 +387,7 @@ adelantado, el request acepta `year` y `month` (opcionales, van juntos): por eje
 |--------|------|--------|-----------|
 | `POST` | `/api/appointments` | 🔑 | `201` el turno reservado |
 | `DELETE` | `/api/appointments/{id}` | 🔑 | `200` `"ok"` (cancelación) |
+| `PUT` | `/api/appointments/{id}/status` | 👤 | `200` el turno con su nuevo estado |
 | `GET` | `/api/appointments/patient?dni=` | 🔑 | `200` turnos del paciente |
 | `GET` | `/api/appointments?date=` | 👤 | `200` paginado, turnos del día |
 | `GET` | `/api/appointments/search` | 👤 | `200` paginado, búsqueda con filtros |
@@ -420,6 +421,17 @@ sobre los de otro recibe `403`.
 ```
 
 Estados posibles: `BOOKED` · `CANCELLED` · `ATTENDED` · `NO_SHOW`.
+
+**`PUT /api/appointments/{id}/status`** — el administrador registra si el paciente vino.
+Body: `{ "status": "ATTENDED" }` o `{ "status": "NO_SHOW" }`. Solo se aplica a un turno
+`BOOKED` que ya empezó; el horario sigue ocupado (no se libera como en la cancelación).
+
+| Situación | Respuesta |
+|-----------|-----------|
+| Otro valor de `status` | `400` `APPOINTMENT_OUTCOME_INVALID` |
+| El turno no existe | `404` `APPOINTMENT_NOT_FOUND` |
+| El turno no está `BOOKED` | `409` `APPOINTMENT_NOT_BOOKED` |
+| El turno todavía no empezó | `409` `APPOINTMENT_NOT_STARTED` |
 
 **`GET /api/appointments?date=YYYY-MM-DD&status=`** — turnos de un día, paginados. Sin
 `date` usa el día de hoy. `status` es opcional y acepta los estados de arriba; por

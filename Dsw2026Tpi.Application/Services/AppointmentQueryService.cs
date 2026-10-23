@@ -131,7 +131,8 @@ public class AppointmentQueryService : IAppointmentQueryService
     // Mapeo defensivo (§0.2): el slot puede llegar null aunque el include esté bien escrito, si el
     // AvailabilitySlot quedó dado de baja por un PUT posterior (pasa con los cancelados que ?date=
     // sí devuelve). Todo con ?. y valores por defecto para no romper.
-    private static AppointmentModel.Response MapToResponse(Appointment a)
+    // internal: AppointmentService la reutiliza para responder el cambio de estado con la misma forma.
+    internal static AppointmentModel.Response MapToResponse(Appointment a)
     {
         var slot = a.AvailabilitySlot;
         var doctor = slot?.AvailabilityRule?.Doctor;

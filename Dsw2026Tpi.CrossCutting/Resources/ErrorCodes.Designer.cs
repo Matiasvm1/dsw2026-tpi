@@ -122,6 +122,33 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("APPOINTMENT_NOT_CANCELLABLE", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Solo se puede registrar un turno como ATTENDED o NO_SHOW.
+        /// </summary>
+        public static string APPOINTMENT_OUTCOME_INVALID {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_OUTCOME_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Solo se puede registrar la asistencia de un turno reservado.
+        /// </summary>
+        public static string APPOINTMENT_NOT_BOOKED {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_BOOKED", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a No se puede registrar la asistencia de un turno que todavía no empezó.
+        /// </summary>
+        public static string APPOINTMENT_NOT_STARTED {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_STARTED", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a El turno indicado no existe.

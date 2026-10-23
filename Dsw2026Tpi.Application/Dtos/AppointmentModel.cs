@@ -5,6 +5,8 @@ public record AppointmentModel
     // ---- entrada ----
     public record Request(Guid DoctorId, Guid AvailabilitySlotId, PatientRequest Patient, string Reason);
     public record PatientRequest(long Dni);
+    // PUT /api/appointments/{id}/status: el admin registra la asistencia (ATTENDED | NO_SHOW).
+    public record StatusRequest(string Status);
 
     // ---- salida ----
     // Fechas y horas siempre como string con formato explícito: TimeOnly serializa "09:00:00"

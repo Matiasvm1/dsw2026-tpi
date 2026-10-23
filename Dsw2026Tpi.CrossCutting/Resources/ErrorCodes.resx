@@ -204,6 +204,15 @@
   <data name="APPOINTMENT_NOT_CANCELLABLE" xml:space="preserve">
     <value>Solo se pueden cancelar turnos reservados</value>
   </data>
+  <data name="APPOINTMENT_OUTCOME_INVALID" xml:space="preserve">
+    <value>Solo se puede registrar un turno como ATTENDED o NO_SHOW</value>
+  </data>
+  <data name="APPOINTMENT_NOT_BOOKED" xml:space="preserve">
+    <value>Solo se puede registrar la asistencia de un turno reservado</value>
+  </data>
+  <data name="APPOINTMENT_NOT_STARTED" xml:space="preserve">
+    <value>No se puede registrar la asistencia de un turno que todavía no empezó</value>
+  </data>
   <data name="APPOINTMENT_REASON_LENGTH" xml:space="preserve">
     <value>El motivo debe tener al menos 5 caracteres</value>
   </data>
