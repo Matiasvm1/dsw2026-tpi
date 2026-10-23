@@ -179,6 +179,17 @@ Todas las excepciones se normalizan en un middleware global:
 
 `details` es opcional y aparece cuando el error tiene desglose por campo.
 
+Los rechazos de autenticación y autorización también usan este formato:
+
+| Situación | Código HTTP | `errorCode` | `details` |
+|-----------|-------------|-------------|-----------|
+| Sin token | `401` | `AUTHENTICATION_REQUIRED` | `{ "field": "token", "issue": "missing" }` |
+| Token vencido | `401` | `AUTHENTICATION_REQUIRED` | `{ "field": "token", "issue": "expired" }` |
+| Token inválido | `401` | `AUTHENTICATION_REQUIRED` | `{ "field": "token", "issue": "invalid" }` |
+| Rol sin permiso para la operación | `403` | `AUTHORIZATION_FAILED` | — |
+
+El frontend puede usar `issue: "expired"` para mostrar "sesión expirada" y volver al login.
+
 ### Rate limiting
 
 | Alcance | Límite | Partición |
