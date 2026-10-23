@@ -52,16 +52,20 @@ public class AppointmentQueryService : IAppointmentQueryService
             .Select(MapToResponse);
     }
 
-    // GET /api/appointments?date=  ·  admin-only, todos los estados, ordenado por hora de inicio.
-    public async Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination)
+    // GET /api/appointments?date=&status=  ·  admin-only, ordenado por hora de inicio.
+    // Sin status devuelve todos los estados (comportamiento original). Con status=BOOKED el total
+    // es el de "Turnos confirmados para hoy" del dashboard, sin contar los cancelados.
+    public async Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination, string? status = null)
     {
         // Sin date se usa el día de hoy; con date mal formado sale 400 APPOINTMENT_DATE_INVALID.
         var day = ParseOptionalDate(date) ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var statusFilter = ParseOptionalStatus(status);
 
         var result = await _persistence.Paginate<Appointment, TimeOnly>(
             pagination.PageSize,
             pagination.PageIndex,
-            a => a.AvailabilitySlot!.SlotDate == day,
+            a => a.AvailabilitySlot!.SlotDate == day
+              && (statusFilter == null || a.Status == statusFilter),
             a => a.AvailabilitySlot!.StartTime,
             FullGraph);
 
@@ -103,6 +107,25 @@ public class AppointmentQueryService : IAppointmentQueryService
                 .WithDetail("date", "expected_format_yyyy-MM-dd");
 
         return parsed;
+    }
+
+    // Recibe el estado con los nombres del contrato (BOOKED, CANCELLED, ATTENDED, NO_SHOW), sin
+    // distinguir mayúsculas. No se usa Enum.TryParse: aceptaría "1" o "NoShow", que no son del contrato.
+    private static AppointmentStatus? ParseOptionalStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return null;
+
+        return status.Trim().ToUpperInvariant() switch
+        {
+            "BOOKED" => AppointmentStatus.Booked,
+            "CANCELLED" => AppointmentStatus.Cancelled,
+            "ATTENDED" => AppointmentStatus.Attended,
+            "NO_SHOW" => AppointmentStatus.NoShow,
+            _ => throw new ValidationException(
+                    nameof(ErrorCodes.APPOINTMENT_STATUS_INVALID),
+                    ErrorCodes.APPOINTMENT_STATUS_INVALID)
+                .WithDetail("status", "expected_BOOKED_CANCELLED_ATTENDED_NO_SHOW")
+        };
     }
 
     // Mapeo defensivo (§0.2): el slot puede llegar null aunque el include esté bien escrito, si el
