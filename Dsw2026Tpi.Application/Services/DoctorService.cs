@@ -23,7 +23,9 @@ public class DoctorService : IDoctorService
     // copian esta forma. Sin filtro no se pasa null, se pasa un predicado que siempre da true.
     // Contains va pelado, sin StringComparison: EF no lo traduce a SQL y falla en ejecución.
     // El case-insensitive lo aporta la collation de SQL Server.
-    public async Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null)
+    // specialtyId es el filtro del CU01 (paso 1-2): el paciente elige la especialidad y solo ve
+    // los médicos asociados. Mismo patrón "filtro == null || condición" que el nombre.
+    public async Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null, Guid? specialtyId = null)
     {
         if (name is not null &&
     (string.IsNullOrWhiteSpace(name) ||
@@ -40,8 +42,9 @@ public class DoctorService : IDoctorService
         var normalizedName = name?.Trim();
 
         var doctors = await _persistence.Paginate<Doctor, string>(pagination.PageSize, pagination.PageIndex,
-                                                   d => normalizedName == null ||
-     d.Name.Contains(normalizedName), x => x.Name, nameof(Doctor.Speciality));
+                                                   d => (normalizedName == null ||
+     d.Name.Contains(normalizedName)) &&
+     (specialtyId == null || d.SpecialityId == specialtyId), x => x.Name, nameof(Doctor.Speciality));
 
         return doctors.Map(d => new DoctorModel.Response(
      d.Id,

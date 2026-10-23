@@ -122,6 +122,47 @@ public class DoctorServiceTests
         Assert.Equal(nameof(ErrorCodes.DOCTOR_NAME_LENGTH), ex.Error.ErrorCode);
     }
 
+    // Captura el predicado que el service le pasa a Paginate y lo evalúa en memoria contra
+    // médicos de dos especialidades: así se prueba el filtro real sin una base de datos.
+    private Func<Doctor, bool> CapturePaginatePredicate()
+    {
+        Expression<Func<Doctor, bool>>? captured = null;
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Doctor, bool>>>(),
+                It.IsAny<Expression<Func<Doctor, string>>>(),
+                It.IsAny<string[]>()))
+            .Callback<int, int, Expression<Func<Doctor, bool>>, Expression<Func<Doctor, string>>, string[]>(
+                (_, _, predicate, _, _) => captured = predicate)
+            .ReturnsAsync(new Pagination<Doctor>(10, 1, 0, []));
+
+        return doctor => captured!.Compile()(doctor);
+    }
+
+    [Fact]
+    public async Task GetAll_ConFiltroDeEspecialidad_SoloIncluyeMedicosDeEsaEspecialidad()
+    {
+        var cardiology = Guid.NewGuid();
+        var neurology = Guid.NewGuid();
+        var predicate = CapturePaginatePredicate();
+
+        await _sut.GetAll(new PaginationQuery(null, null), specialtyId: cardiology);
+
+        Assert.True(predicate(TestData.MakeDoctor(cardiology)));
+        Assert.False(predicate(TestData.MakeDoctor(neurology)));
+    }
+
+    [Fact]
+    public async Task GetAll_SinFiltros_IncluyeTodosLosMedicos()
+    {
+        var predicate = CapturePaginatePredicate();
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(predicate(TestData.MakeDoctor(Guid.NewGuid())));
+        Assert.True(predicate(TestData.MakeDoctor(Guid.NewGuid())));
+    }
+
     [Fact]
     public async Task GetAvailabilities_MedicoInexistente_Lanza404()
     {
