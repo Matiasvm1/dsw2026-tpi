@@ -161,4 +161,70 @@ public class AuthenticationServiceTests
         Assert.False(string.IsNullOrWhiteSpace(result.Token));
         Assert.Equal(Roles.PatientResponse, result.Role); // "PACIENTE"
     }
+
+    // ---------------------------------------------------------------- LoginPatient con fullName
+
+    private void ArrangeSelfRegister()
+    {
+        _userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
+        SetupFirstPatient(null); // DNI libre
+        _userManager.Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>())).ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(m => m.AddToRoleAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Success);
+    }
+
+    private Patient ArrangeExistingPatient(string? fullName = null)
+    {
+        var user = User("pac@test.com");
+        var patient = new Patient(user.Id, "12345678", fullName);
+        _userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        SetupFirstPatient(patient);
+        _persistence.Setup(p => p.Update(It.IsAny<Patient>())).ReturnsAsync((Patient p) => p);
+        return patient;
+    }
+
+    [Theory]
+    [InlineData("Al")]
+    [InlineData("   ")]
+    public async Task LoginPatient_NombreConLongitudInvalida_Lanza400(string fullName)
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.LoginPatient(new LoginPatientModel.Request("nuevo@test.com", 12345678, fullName)));
+        Assert.Equal(nameof(ErrorCodes.PATIENT_FULLNAME_LENGTH), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task LoginPatient_AutorregistroConNombre_GuardaElNombre()
+    {
+        ArrangeSelfRegister();
+        Patient? saved = null;
+        _persistence.Setup(p => p.Add(It.IsAny<Patient>()))
+            .Callback<Patient>(p => saved = p).ReturnsAsync((Patient p) => p);
+
+        await _sut.LoginPatient(new LoginPatientModel.Request("nuevo@test.com", 12345678, "  Juan Pérez  "));
+
+        Assert.Equal("Juan Pérez", saved!.FullName);
+    }
+
+    [Fact]
+    public async Task LoginPatient_ExistenteConNombreNuevo_ActualizaElNombre()
+    {
+        var patient = ArrangeExistingPatient();
+
+        await _sut.LoginPatient(new LoginPatientModel.Request("pac@test.com", 12345678, "Juan Pérez"));
+
+        Assert.Equal("Juan Pérez", patient.FullName);
+        _persistence.Verify(p => p.Update(patient), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginPatient_ExistenteSinNombreEnElRequest_NoModificaElPaciente()
+    {
+        var patient = ArrangeExistingPatient("Juan Pérez");
+
+        await _sut.LoginPatient(new LoginPatientModel.Request("pac@test.com", 12345678));
+
+        Assert.Equal("Juan Pérez", patient.FullName);
+        _persistence.Verify(p => p.Update(It.IsAny<Patient>()), Times.Never);
+    }
 }
