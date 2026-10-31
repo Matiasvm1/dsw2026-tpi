@@ -21,7 +21,28 @@ public class PersistenceEf: IPersistence
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         await _context.AddAsync(entity);
+        await SaveNewEntities();
+        return entity;
+    }
 
+    // Da de alta las entidades con todo lo que cuelga de ellas (la regla con sus slots) en un solo
+    // SaveChanges: o se guarda todo, o no se guarda nada.
+    public async Task AddRange<T>(IEnumerable<T> entities) where T : EntityBase
+    {
+        await _context.AddRangeAsync(entities);
+
+        var now = DateTime.UtcNow;
+        foreach (var entry in _context.ChangeTracker.Entries<EntityBase>().Where(e => e.State == EntityState.Added))
+        {
+            entry.Entity.CreatedAt = now;
+            entry.Entity.UpdatedAt = now;
+        }
+
+        await SaveNewEntities();
+    }
+
+    private async Task SaveNewEntities()
+    {
         try
         {
             await _context.SaveChangesAsync();
@@ -31,7 +52,16 @@ public class PersistenceEf: IPersistence
             throw new ConflictException(nameof(ErrorCodes.UNIQUE_CONSTRAINT_VIOLATION),
                 ErrorCodes.UNIQUE_CONSTRAINT_VIOLATION);
         }
-        return entity;
+    }
+
+    // Trae al médico con una sola consulta y solo las reglas activas del mes pedido: son pocas y
+    // alcanzan para comprobar superposiciones en memoria. Un Include por nombre traería también
+    // las eliminadas y las de todos los demás meses.
+    public async Task<Doctor?> GetDoctorWithAvailabilityRules(Guid doctorId, short year, byte month)
+    {
+        return await _context.Doctors
+            .Include(d => d.AvailabilityRules.Where(r => !r.Deleted && r.Year == year && r.Month == month))
+            .FirstOrDefaultAsync(d => d.Id == doctorId);
     }
 
     // 2601: clave duplicada en índice único

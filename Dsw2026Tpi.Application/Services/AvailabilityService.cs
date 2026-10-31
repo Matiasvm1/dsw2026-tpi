@@ -25,45 +25,40 @@ public class AvailabilityService : IAvailabilityService
 
     public async Task<AvailabilityModel.Response> Create(AvailabilityModel.Request request)
     {
-        await ValidateDoctorAndDays(request);
+        var now = DateTime.UtcNow;
+        var currentYear = (short)now.Year;
+        var currentMonth = (byte)now.Month;
+
+        var doctor = await _persistence.GetDoctorWithAvailabilityRules(request.DoctorId, currentYear, currentMonth)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
+
+        ValidateDaysRequired(request);
 
         var parsedDays = ParseAndValidatePayloadDays(request.Days);
-
-        var now = DateTime.UtcNow;
-        var currentYear = now.Year;
-        var currentMonth = now.Month;
-
-        var existingRules = await _persistence.GetFiltered<AvailabilityRule>(
-            r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? [];
-
-        ValidateNoOverlapsWithExistingRules(parsedDays, existingRules);
 
         // Leer días no laborables desde appsettings
         var nonWorkingDays = GetNonWorkingDays();
 
-        var rulesCreated = 0;
         var slotsCreated = 0;
         var effectiveRules = new List<AvailabilityRule>();
 
         foreach (var dayReq in parsedDays)
         {
-            var rule = new AvailabilityRule(request.DoctorId, (short)currentYear, (byte)currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
-            await _persistence.Add(rule);
-            rulesCreated++;
+            if (!doctor.CheckAvailability(currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime))
+                throw new ConflictException(nameof(ErrorCodes.AVAILABILITY_OVERLAP), ErrorCodes.AVAILABILITY_OVERLAP);
+
+            var rule = doctor.AddAvailability(currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
             effectiveRules.Add(rule);
 
-            var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays);
-            foreach (var slot in slots)
-            {
-                await _persistence.Add(slot);
-                slotsCreated++;
-            }
+            slotsCreated += rule.GenerateSlots(DateOnly.FromDateTime(now), now, nonWorkingDays).Count;
         }
+
+        await _persistence.AddRange(effectiveRules);
 
         // D08: la generación de disponibilidad no es un CRUD, se audita.
         _logger.LogInformation(
             "Disponibilidad generada para el médico {DoctorId} en {Month}/{Year}: {RulesCreated} reglas y {SlotsCreated} turnos",
-            request.DoctorId, currentMonth, currentYear, rulesCreated, slotsCreated);
+            request.DoctorId, currentMonth, currentYear, effectiveRules.Count, slotsCreated);
 
         return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
@@ -141,12 +136,9 @@ public class AvailabilityService : IAvailabilityService
 
             effectiveRules.Add(rule);
 
-            var slots = GenerateSlots(rule, DateOnly.FromDateTime(now), now, nonWorkingDays, occupied);
-            foreach (var slot in slots)
-            {
-                await _persistence.Add(slot);
-                slotsCreated++;
-            }
+            var slots = rule.GenerateSlots(DateOnly.FromDateTime(now), now, nonWorkingDays, occupied);
+            await _persistence.AddRange(slots);
+            slotsCreated += slots.Count;
         }
 
         // D08: la regeneración de disponibilidad tampoco es un CRUD, se audita.
@@ -182,6 +174,11 @@ public class AvailabilityService : IAvailabilityService
         if (doctor is null)
             throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
+        ValidateDaysRequired(request);
+    }
+
+    private static void ValidateDaysRequired(AvailabilityModel.Request request)
+    {
         if (request.Days is null || !request.Days.Any())
             throw new ValidationException(nameof(ErrorCodes.AVAILABILITY_DAYS_REQUIRED), ErrorCodes.AVAILABILITY_DAYS_REQUIRED);
     }
@@ -224,52 +221,6 @@ public class AvailabilityService : IAvailabilityService
         }
 
         return result;
-    }
-
-    private static void ValidateNoOverlapsWithExistingRules(List<ParsedDayRequest> newDays, IEnumerable<AvailabilityRule> existingRules)
-    {
-        foreach (var newDay in newDays)
-        {
-            foreach (var existing in existingRules)
-            {
-                if (newDay.DayOfWeek == existing.DayOfWeek &&
-                    newDay.StartTime < existing.EndTime &&
-                    existing.StartTime < newDay.EndTime)
-                {
-                    throw new ConflictException(nameof(ErrorCodes.AVAILABILITY_OVERLAP), ErrorCodes.AVAILABILITY_OVERLAP);
-                }
-            }
-        }
-    }
-
-    private static IEnumerable<AvailabilitySlot> GenerateSlots(
-        AvailabilityRule rule, DateOnly from, DateTime nowUtc, IReadOnlySet<DateOnly> nonWorkingDays,
-        IReadOnlySet<(DateOnly Date, TimeOnly Start)>? occupied = null)
-    {
-        var lastDay = DateTime.DaysInMonth(rule.Year, rule.Month);
-        var slots = new List<AvailabilitySlot>();
-
-        for (var day = from.Day; day <= lastDay; day++)
-        {
-            var date = new DateOnly(rule.Year, rule.Month, day);
-            if (date.DayOfWeek != rule.DayOfWeek) continue;
-
-            if (nonWorkingDays.Contains(date)) continue;
-
-            for (var start = rule.StartTime; start < rule.EndTime; start = start.AddMinutes(30))
-            {
-                var end = start.AddMinutes(30);
-
-                if (date.ToDateTime(start) <= nowUtc) continue;
-
-                // No regenerar un horario que ya sostiene un slot vivo (reservado o pasado).
-                if (occupied is not null && occupied.Contains((date, start))) continue;
-
-                slots.Add(new AvailabilitySlot(rule.Id, rule.DoctorId, date, start, end));
-            }
-        }
-
-        return slots;
     }
 
     private HashSet<DateOnly> GetNonWorkingDays()

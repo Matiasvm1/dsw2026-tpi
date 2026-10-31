@@ -32,9 +32,15 @@ public class AvailabilityServiceTests
         params (string day, string start, string end)[] days) =>
         new(doctorId, days.Select(d => new AvailabilityModel.DayRequest(d.day, d.start, d.end)).ToList());
 
-    private void DoctorExists() =>
+    private Doctor DoctorExists()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
         _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>()))
-            .ReturnsAsync(TestData.MakeDoctor(Guid.NewGuid()));
+            .ReturnsAsync(doctor);
+        _persistence.Setup(p => p.GetDoctorWithAvailabilityRules(It.IsAny<Guid>(), It.IsAny<short>(), It.IsAny<byte>()))
+            .ReturnsAsync(doctor);
+        return doctor;
+    }
 
     private void ExistingRules(params AvailabilityRule[] rules) =>
         _persistence.Setup(p => p.GetFiltered(
@@ -44,7 +50,7 @@ public class AvailabilityServiceTests
     [Fact]
     public async Task Create_MedicoInexistente_Lanza404()
     {
-        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+        _persistence.Setup(p => p.GetDoctorWithAvailabilityRules(It.IsAny<Guid>(), It.IsAny<short>(), It.IsAny<byte>()))
             .ReturnsAsync((Doctor?)null);
 
         var ex = await Assert.ThrowsAsync<EntityNotFoundException>(
@@ -115,30 +121,37 @@ public class AvailabilityServiceTests
     }
 
     [Fact]
-    public async Task Create_SeSolapaConReglaExistente_Lanza409()
+    public async Task Create_SeSolapaConReglaExistente_Lanza409YNoPersisteNada()
     {
-        var doctorId = Guid.NewGuid();
-        DoctorExists();
-        // Ya hay una regla MARTES 09:00-12:00 cargada para ese médico.
-        ExistingRules(TestData.MakeRule(doctorId, day: DayOfWeek.Tuesday));
+        var doctor = DoctorExists();
+        var now = DateTime.UtcNow;
+        // Ya hay una regla MARTES 09:00-12:00 cargada para ese médico en el mes actual.
+        doctor.AddAvailability((short)now.Year, (byte)now.Month, DayOfWeek.Tuesday, new TimeOnly(9, 0), new TimeOnly(12, 0));
 
         var ex = await Assert.ThrowsAsync<ConflictException>(
-            () => _sut.Create(Req(doctorId, ("MARTES", "10:00", "11:00"))));
+            () => _sut.Create(Req(doctor.Id, ("MARTES", "10:00", "11:00"))));
+
         Assert.Equal(nameof(ErrorCodes.AVAILABILITY_OVERLAP), ex.Error.ErrorCode);
+        _persistence.Verify(p => p.AddRange(It.IsAny<IEnumerable<AvailabilityRule>>()), Times.Never);
     }
 
     [Fact]
-    public async Task Create_ConDatosValidos_CreaLaReglaYDevuelveElResumen()
+    public async Task Create_ConDatosValidos_ElMedicoCreaLaReglaYSeGuardaTodoDeUnaVez()
     {
-        DoctorExists();
-        ExistingRules(); // no hay reglas previas
-        _persistence.Setup(p => p.Add(It.IsAny<AvailabilityRule>())).ReturnsAsync((AvailabilityRule r) => r);
-        _persistence.Setup(p => p.Add(It.IsAny<AvailabilitySlot>())).ReturnsAsync((AvailabilitySlot s) => s);
+        var doctor = DoctorExists();
+        List<AvailabilityRule>? saved = null;
+        _persistence.Setup(p => p.AddRange(It.IsAny<IEnumerable<AvailabilityRule>>()))
+            .Callback<IEnumerable<AvailabilityRule>>(rules => saved = rules.ToList())
+            .Returns(Task.CompletedTask);
 
-        var result = await _sut.Create(Req(Guid.NewGuid(), ("MARTES", "09:00", "12:00")));
+        var result = await _sut.Create(Req(doctor.Id, ("MARTES", "09:00", "12:00")));
 
         Assert.Single(result.Days); // devuelve el schedule creado (1 día)
-        _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Once);
+        Assert.Single(doctor.AvailabilityRules);
+        Assert.Same(doctor.AvailabilityRules.Single(), Assert.Single(saved!));
+        _persistence.Verify(p => p.AddRange(It.IsAny<IEnumerable<AvailabilityRule>>()), Times.Once);
+        _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Never);
+        _persistence.Verify(p => p.Add(It.IsAny<AvailabilitySlot>()), Times.Never);
     }
 
     private void ExistingSlots(params AvailabilitySlot[] slots) =>
