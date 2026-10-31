@@ -162,6 +162,72 @@ public class DoctorService : IDoctorService
                 rule.EndTime.ToString("HH\\:mm")));
     }
 
+    private const int MaxSlotRangeDays = 31;
+    private const int DefaultSlotRangeDays = 7;
+
+    // CU01 paso 4: "el sistema muestra horarios disponibles". POST /api/appointments pide un
+    // availabilitySlotId, pero GET /availabilities devuelve reglas ("Lunes 09:00-12:00"), no los
+    // turnos concretos: sin este endpoint el front no tiene de dónde sacar ese id.
+    // Devuelve también los reservados y bloqueados con su estado: el mockup mobile los muestra
+    // tachados (CU01 4b, "no están disponibles para elección") en vez de ocultarlos.
+    public async Task<IEnumerable<DoctorModel.SlotResponse>> GetSlots(Guid doctorId, string? from, string? to)
+    {
+        _ = await _persistence.GetById<Doctor>(doctorId)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
+
+        var nowUtc = DateTime.UtcNow;
+        var fromDate = ParseSlotDate(from, nameof(from)) ?? DateOnly.FromDateTime(nowUtc);
+        var toDate = ParseSlotDate(to, nameof(to)) ?? fromDate.AddDays(DefaultSlotRangeDays - 1);
+
+        if (toDate < fromDate)
+        {
+            throw new ValidationException(nameof(ErrorCodes.SLOT_RANGE_INVALID), ErrorCodes.SLOT_RANGE_INVALID)
+                .WithDetail(nameof(to), "must_not_be_before_from");
+        }
+
+        // Tope de 31 días: alcanza para una vista mensual y evita traer miles de filas de golpe.
+        if (toDate.DayNumber - fromDate.DayNumber + 1 > MaxSlotRangeDays)
+        {
+            throw new ValidationException(nameof(ErrorCodes.SLOT_RANGE_INVALID), ErrorCodes.SLOT_RANGE_INVALID)
+                .WithDetail(nameof(to), "range_max_31_days");
+        }
+
+        var slots = await _persistence.GetFiltered<AvailabilitySlot>(
+            slot =>
+                slot.DoctorId == doctorId &&
+                slot.SlotDate >= fromDate &&
+                slot.SlotDate <= toDate);
+
+        // RN04: lo pasado no se puede reservar, así que ni se muestra. Se filtra en memoria porque
+        // combinar SlotDate + StartTime en una fecha no lo traduce EF a SQL. Mismo criterio de
+        // "ahora" (UTC) que la generación de slots y la reserva.
+        return (slots ?? [])
+            .Where(slot => slot.SlotDate.ToDateTime(slot.StartTime) > nowUtc)
+            .OrderBy(slot => slot.SlotDate)
+            .ThenBy(slot => slot.StartTime)
+            .Select(slot => new DoctorModel.SlotResponse(
+                slot.Id,
+                slot.SlotDate.ToString("yyyy-MM-dd"),
+                slot.StartTime.ToString("HH\\:mm"),
+                slot.EndTime.ToString("HH\\:mm"),
+                slot.Status.ToString().ToUpperInvariant()));
+    }
+
+    // Se reciben como string (no DateOnly?) por el mismo motivo que en las consultas de turnos:
+    // con DateOnly? el framework respondería su propio 400 y nuestro código de error no saldría.
+    private static DateOnly? ParseSlotDate(string? value, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", out var parsed))
+        {
+            throw new ValidationException(nameof(ErrorCodes.SLOT_RANGE_INVALID), ErrorCodes.SLOT_RANGE_INVALID)
+                .WithDetail(field, "expected_format_yyyy-MM-dd");
+        }
+
+        return parsed;
+    }
+
 
     private static void Validate(DoctorModel.Request request)
     {

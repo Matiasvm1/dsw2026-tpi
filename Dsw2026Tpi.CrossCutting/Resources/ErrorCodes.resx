@@ -228,4 +228,7 @@
   <data name="RATE_LIMIT_EXCEEDED" xml:space="preserve">
     <value>Demasiadas solicitudes. Intente nuevamente en unos instantes</value>
   </data>
+  <data name="SLOT_RANGE_INVALID" xml:space="preserve">
+    <value>El rango de fechas es inválido: use el formato YYYY-MM-DD, 'to' no puede ser anterior a 'from' y el rango no puede superar 31 días</value>
+  </data>
 </root>
