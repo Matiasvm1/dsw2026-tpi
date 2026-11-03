@@ -192,7 +192,12 @@ Al excederse se devuelve `429 Too Many Requests` con el sobre de error estándar
 (`RATE_LIMIT_EXCEEDED`). Los límites se configuran en la sección `RateLimiting` de
 `appsettings.json`.
 
----
+### CORS
+
+Solo se aceptan los orígenes listados en `Cors:AllowedOrigins` de
+`appsettings.Development.json`. Incluye `http://localhost:5173`, el puerto por defecto
+del frontend con Vite. Si el front corre en otro puerto, hay que agregarlo ahí.
+
 
 ## Endpoints
 
@@ -241,6 +246,7 @@ paciente no existe se registra automáticamente.
 | Método | Ruta | Acceso | Respuesta |
 |--------|------|--------|-----------|
 | `GET` | `/api/specialties` | 🔑 | `200` paginado |
+| `GET` | `/api/specialties/{id}` | 🔑 | `200` la especialidad · `404` si no existe |
 | `POST` | `/api/specialties` | 👤 | `201` la especialidad creada |
 | `PUT` | `/api/specialties/{id}` | 👤 | `200` la especialidad actualizada |
 | `DELETE` | `/api/specialties/{id}` | 👤 | `200` `"ok"` (baja lógica) |
@@ -263,16 +269,19 @@ El paciente **puede** listar especialidades: las necesita para reservar un turno
 | Método | Ruta | Acceso | Respuesta |
 |--------|------|--------|-----------|
 | `GET` | `/api/doctors` | 🔑 | `200` paginado |
++| `GET` | `/api/doctors/{id}` | 🔑 | `200` el médico · `404` si no existe |
 | `POST` | `/api/doctors` | 👤 | `201` el médico creado |
 | `PUT` | `/api/doctors/{id}` | 👤 | `200` el médico actualizado |
 | `DELETE` | `/api/doctors/{id}` | 👤 | `200` `"ok"` (baja lógica) |
 | `GET` | `/api/doctors/{id}/availabilities` | 🔑 | `200` disponibilidades del médico |
+| `GET` | `/api/doctors/{id}/slots` | 🔑 | `200` turnos de 30 minutos del médico |
 
-`GET` acepta `?name=` para filtrar, además de la paginación.
+`GET /api/doctors` acepta `?name=` y `?specialtyId=` para filtrar (combinables), además
+de la paginación. El filtro por especialidad es el que usa el paciente al reservar.
 
 ```jsonc
-// request de POST / PUT — el request pide specialityId; la respuesta anida specialty
-{ "name": "Dr. Pérez", "licenseNumber": "MP-12345", "specialityId": "3f1a..." }
+// request de POST / PUT — el request pide specialtyId; la respuesta anida specialty
+{ "name": "Dr. Pérez", "licenseNumber": "MP-12345", "specialtyId": "3f1a..." }
 
 // response
 {
@@ -291,6 +300,23 @@ El paciente **puede** listar especialidades: las necesita para reservar un turno
 ```
 
 ---
+**`GET /api/doctors/{id}/slots?from=YYYY-MM-DD&to=YYYY-MM-DD`** — los turnos concretos
+del médico en un rango de fechas. El `id` de cada uno es el `availabilitySlotId` que pide
+`POST /api/appointments`. Sin fechas devuelve los próximos 7 días desde hoy; el rango
+máximo es de 31 días. Nunca devuelve turnos pasados, y los reservados o bloqueados
+vienen con su estado para que el front los muestre deshabilitados.
+
+```jsonc
+// GET /api/doctors/{id}/slots?from=2026-08-10&to=2026-08-14 — 200 OK
+[
+  { "id": "c42d...", "date": "2026-08-10", "startTime": "09:00", "endTime": "09:30", "status": "AVAILABLE" },
+  { "id": "e17a...", "date": "2026-08-10", "startTime": "09:30", "endTime": "10:00", "status": "BOOKED" }
+]
+```
+
+Estados posibles: `AVAILABLE` · `BOOKED` · `BLOCKED`. Si el formato de fecha es
+inválido, `to` es anterior a `from` o el rango supera 31 días, responde `400`
+`SLOT_RANGE_INVALID`.
 
 ### Disponibilidades — `/api/availabilities`
 
@@ -372,6 +398,10 @@ Estados posibles: `BOOKED` · `CANCELLED` · `ATTENDED` · `NO_SHOW`.
 
 **`GET /api/appointments/search`** — filtros opcionales y combinables:
 `specialtyId`, `doctorId`, `dni`, `date`, más paginación.
+**`GET /api/appointments?date=YYYY-MM-DD&status=`** — turnos de un día, paginados. Sin
+`date` usa el día de hoy. `status` es opcional y acepta los estados de arriba; por
+ejemplo, `?status=BOOKED` devuelve solo los confirmados (el total del dashboard). Un
+estado desconocido responde `400` `APPOINTMENT_STATUS_INVALID`.
 
 ```jsonc
 // data[] — shape propio del listado del administrador
