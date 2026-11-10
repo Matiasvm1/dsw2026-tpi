@@ -392,5 +392,14 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("RATE_LIMIT_EXCEEDED", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El rango de fechas es inválido: use el formato YYYY-MM-DD, &apos;to&apos; no puede ser anterior a &apos;from&apos; y el rango no puede superar 31 días.
+        /// </summary>
+        public static string SLOT_RANGE_INVALID {
+            get {
+                return ResourceManager.GetString("SLOT_RANGE_INVALID", resourceCulture);
+            }
+        }
     }
 }

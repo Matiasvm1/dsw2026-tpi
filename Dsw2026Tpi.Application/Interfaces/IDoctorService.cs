@@ -18,4 +18,7 @@ public interface IDoctorService
 
     Task<IEnumerable<DoctorModel.AvailabilityResponse>> GetAvailabilities(
         Guid doctorId);
+
+    Task<IEnumerable<DoctorModel.SlotResponse>> GetSlots(
+        Guid doctorId, string? from, string? to);
 }

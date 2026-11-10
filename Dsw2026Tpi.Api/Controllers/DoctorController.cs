@@ -68,4 +68,16 @@ public class DoctorController : AppController
         return Ok(availabilities);
     }
 
+    // GET /api/doctors/{id}/slots?from=YYYY-MM-DD&to=YYYY-MM-DD  ·  cualquier usuario logueado.
+    // Sin fechas devuelve los próximos 7 días desde hoy. Cada id es un availabilitySlotId.
+    [HttpGet("{id:guid}/slots")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSlots(Guid id, [FromQuery] string? from, [FromQuery] string? to)
+    {
+        var slots = await _service.GetSlots(id, from, to);
+        return Ok(slots);
+    }
+
 }

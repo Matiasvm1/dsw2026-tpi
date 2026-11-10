@@ -10,5 +10,13 @@ public record DoctorModel
     public record SpecialityDto(Guid Id, string Name);
     public record AvailabilityResponse(Guid Id, string Day, string StartTime, string EndTime);
 
+    // Un turno de 30 minutos concreto. El Id es el availabilitySlotId que pide POST /api/appointments.
+    public record SlotResponse(
+        Guid Id,
+        string Date,        // "yyyy-MM-dd"
+        string StartTime,   // "HH:mm"
+        string EndTime,     // "HH:mm"
+        string Status);     // AVAILABLE | BOOKED | BLOCKED
+
   
 }
