@@ -1,14 +1,30 @@
 ﻿using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Data.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json;
 
 namespace Dsw2026Tpi.Api.Configurations;
 
 public static class SecurityConfigurationExtensions
 {
+    // El sobre de error de la API va en camelCase, igual que el ExceptionHandlingMiddleware.
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    private static Task WriteError(HttpResponse response, int statusCode, ErrorResponse error)
+    {
+        response.StatusCode = statusCode;
+        response.ContentType = "application/json";
+        return response.WriteAsync(JsonSerializer.Serialize(error, SerializerOptions));
+    }
+
     public static IServiceCollection AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         //Obtener parámetros para creación del JWT desde appsettings.json
@@ -38,6 +54,39 @@ public static class SecurityConfigurationExtensions
                     ValidAudience = audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key)
                 };
+            
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = async context =>
+                    {
+                        // Evita la respuesta por defecto (401 sin cuerpo) y escribe la nuestra.
+                        context.HandleResponse();
+                        context.Response.Headers.WWWAuthenticate = "Bearer";
+
+                        var issue = context.AuthenticateFailure switch
+                        {
+                            null => "missing",
+                            SecurityTokenExpiredException => "expired",
+                            _ => "invalid"
+                       };
+
+                        var error = new ErrorResponse(nameof(ErrorCodes.AUTHENTICATION_REQUIRED),
+                            ErrorCodes.AUTHENTICATION_REQUIRED);
+                        error.AddDetail("token", issue);
+
+                        await WriteError(context.Response, StatusCodes.Status401Unauthorized, error);
+                    },
+                    OnForbidden = context =>
+                    {
+                        var error = new ErrorResponse(nameof(ErrorCodes.AUTHORIZATION_FAILED),
+                            ErrorCodes.AUTHORIZATION_FAILED);
+
+                        return WriteError(context.Response, StatusCodes.Status403Forbidden, error);
+                    }
+                };
+
+
+                
             });
         services.AddAuthorizationBuilder()
             .AddPolicy(Policies.AdminPolicy, policy =>

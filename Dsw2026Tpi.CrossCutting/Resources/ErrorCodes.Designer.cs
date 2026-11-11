@@ -79,6 +79,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a El estado del turno es inválido. Valores posibles: BOOKED, CANCELLED, ATTENDED, NO_SHOW.
+        /// </summary>
+        public static string APPOINTMENT_STATUS_INVALID {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_STATUS_INVALID", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a El horario seleccionado no pertenece al médico indicado.
         /// </summary>
         public static string APPOINTMENT_DOCTOR_MISMATCH {
@@ -156,6 +165,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string AUTHENTICATION_FAILED {
             get {
                 return ResourceManager.GetString("AUTHENTICATION_FAILED", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Debe iniciar sesión para acceder a este recurso, o la sesión expiró.
+        /// </summary>
+        public static string AUTHENTICATION_REQUIRED {
+            get {
+                return ResourceManager.GetString("AUTHENTICATION_REQUIRED", resourceCulture);
             }
         }
         
