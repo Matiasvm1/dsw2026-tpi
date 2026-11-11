@@ -167,6 +167,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("AUTHENTICATION_FAILED", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Debe iniciar sesión para acceder a este recurso, o la sesión expiró.
+        /// </summary>
+        public static string AUTHENTICATION_REQUIRED {
+            get {
+                return ResourceManager.GetString("AUTHENTICATION_REQUIRED", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a Se requieren permisos para la operación solicitada.
