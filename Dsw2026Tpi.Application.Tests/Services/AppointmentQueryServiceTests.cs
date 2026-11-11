@@ -148,7 +148,71 @@ public class AppointmentQueryServiceTests
         Assert.Equal("BOOKED", result.Data.First().Status);
     }
 
-    // ---------------------------------------------------------------- Search
+    // Captura el predicado del Paginate de GetByDate para evaluarlo contra turnos en memoria.
+    private Func<Appointment, bool> CaptureGetByDatePredicate()
+    {
+        Expression<Func<Appointment, bool>>? captured = null;
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Appointment, bool>>>(),
+                It.IsAny<Expression<Func<Appointment, TimeOnly>>>(),
+                It.IsAny<string[]>()))
+            .Callback<int, int, Expression<Func<Appointment, bool>>, Expression<Func<Appointment, TimeOnly>>, string[]>(
+                (_, _, predicate, _, _) => captured = predicate)
+            .ReturnsAsync(new Pagination<Appointment>(10, 1, 0, []));
+
+        return appointment => captured!.Compile()(appointment);
+    }
+
+    private static (Appointment Booked, Appointment Cancelled) MakeBookedAndCancelled(DateOnly day)
+    {
+        var speciality = TestData.MakeSpeciality();
+        var doctor = TestData.MakeDoctor(speciality.Id, speciality);
+        var patient = TestData.MakePatient("12345678");
+        var booked = TestData.MakeBookedAppointment(patient, doctor, speciality, date: day);
+        var cancelled = TestData.MakeBookedAppointment(patient, doctor, speciality, date: day,
+            start: new TimeOnly(10, 0));
+        cancelled.Cancel();
+        return (booked, cancelled);
+    }
+
+    [Fact]
+    public async Task GetByDate_ConEstadoBooked_ExcluyeLosCancelados()
+    {
+        var day = new DateOnly(2026, 8, 10);
+        var (booked, cancelled) = MakeBookedAndCancelled(day);
+        var predicate = CaptureGetByDatePredicate();
+
+        await _sut.GetByDate("2026-08-10", new PaginationQuery(null, null), "BOOKED");
+
+        Assert.True(predicate(booked));
+        Assert.False(predicate(cancelled));
+    }
+
+    [Fact]
+    public async Task GetByDate_SinEstado_IncluyeTodosLosEstados()
+    {
+        var day = new DateOnly(2026, 8, 10);
+        var (booked, cancelled) = MakeBookedAndCancelled(day);
+        var predicate = CaptureGetByDatePredicate();
+
+        await _sut.GetByDate("2026-08-10", new PaginationQuery(null, null));
+
+        Assert.True(predicate(booked));
+        Assert.True(predicate(cancelled));
+    }
+
+    [Theory]
+    [InlineData("CONFIRMADO")]
+    [InlineData("1")]
+    public async Task GetByDate_EstadoInvalido_Lanza400(string status)
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.GetByDate(null, new PaginationQuery(null, null), status));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_STATUS_INVALID), ex.Error.ErrorCode);
+    }
+
+     // ---------------------------------------------------------------- Search
 
     [Fact]
     public async Task Search_FechaInvalida_Lanza400()
