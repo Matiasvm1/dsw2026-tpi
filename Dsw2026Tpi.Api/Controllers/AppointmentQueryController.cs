@@ -30,16 +30,17 @@ public class AppointmentQueryController : AppController
         return Ok(appointments);
     }
 
-    // GET /api/appointments?date=YYYY-MM-DD  ·  admin-only.
+    // GET /api/appointments?date=YYYY-MM-DD&status=BOOKED  ·  admin-only. status es opcional.
     [HttpGet]
     [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByDate(
         [FromQuery] string? date,
         [FromQuery] int? pageSize,
-        [FromQuery] int? pageIndex)
-    {
-        var result = await _service.GetByDate(date, new PaginationQuery(pageSize, pageIndex));
+        [FromQuery] int? pageIndex,
+        [FromQuery] string? status = null)
+     {
+        var result = await _service.GetByDate(date, new PaginationQuery(pageSize, pageIndex), status);
         return Ok(result);
     }
 

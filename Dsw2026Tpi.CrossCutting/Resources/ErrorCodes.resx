@@ -213,6 +213,9 @@
   <data name="APPOINTMENT_DATE_INVALID" xml:space="preserve">
     <value>El formato de fecha debe ser YYYY-MM-DD</value>
   </data>
+  <data name="APPOINTMENT_STATUS_INVALID" xml:space="preserve">
+    <value>El estado del turno es inválido. Valores posibles: BOOKED, CANCELLED, ATTENDED, NO_SHOW</value>
+  </data>
   <data name="PATIENT_DNI_INVALID" xml:space="preserve">
     <value>El DNI debe tener entre 7 y 10 dígitos</value>
   </data>
