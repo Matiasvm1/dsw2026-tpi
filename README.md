@@ -439,7 +439,8 @@ ejemplo, `?status=BOOKED` devuelve solo los confirmados (el total del dashboard)
 estado desconocido responde `400` `APPOINTMENT_STATUS_INVALID`.
 
 **`GET /api/appointments/search`** — filtros opcionales y combinables:
-`specialtyId`, `doctorId`, `dni`, `date`, más paginación.
+`specialtyId`, `doctorId`, `dni`, `date`, `status`, más paginación. `status` acepta los
+mismos valores que en `GET /api/appointments` (`400` `APPOINTMENT_STATUS_INVALID` si no).
 
 ```jsonc
 // data[] — shape propio del listado del administrador

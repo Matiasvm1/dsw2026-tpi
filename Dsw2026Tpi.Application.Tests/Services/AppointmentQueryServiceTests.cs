@@ -236,4 +236,52 @@ public class AppointmentQueryServiceTests
 
         Assert.Equal("2026-08-10 09:30", result.Data.First().AvailableTime);
     }
+
+    // Captura el predicado del Paginate del search (ordena por fecha, clave DateOnly).
+    private Func<Appointment, bool> CaptureSearchPredicate()
+    {
+        Expression<Func<Appointment, bool>>? captured = null;
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Appointment, bool>>>(),
+                It.IsAny<Expression<Func<Appointment, DateOnly>>>(),
+                It.IsAny<string[]>()))
+            .Callback<int, int, Expression<Func<Appointment, bool>>, Expression<Func<Appointment, DateOnly>>, string[]>(
+                (_, _, predicate, _, _) => captured = predicate)
+            .ReturnsAsync(new Pagination<Appointment>(10, 1, 0, []));
+
+        return appointment => captured!.Compile()(appointment);
+    }
+
+    [Fact]
+    public async Task Search_ConEstado_SoloIncluyeTurnosEnEseEstado()
+    {
+        var (booked, cancelled) = MakeBookedAndCancelled(new DateOnly(2026, 8, 10));
+        var predicate = CaptureSearchPredicate();
+
+        await _sut.Search(null, null, null, null, new PaginationQuery(null, null), "cancelled");
+
+        Assert.False(predicate(booked));
+        Assert.True(predicate(cancelled));
+    }
+
+    [Fact]
+    public async Task Search_SinEstado_IncluyeTodosLosEstados()
+    {
+        var (booked, cancelled) = MakeBookedAndCancelled(new DateOnly(2026, 8, 10));
+        var predicate = CaptureSearchPredicate();
+
+        await _sut.Search(null, null, null, null, new PaginationQuery(null, null));
+
+        Assert.True(predicate(booked));
+        Assert.True(predicate(cancelled));
+    }
+
+    [Fact]
+    public async Task Search_EstadoInvalido_Lanza400()
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.Search(null, null, null, null, new PaginationQuery(null, null), "COMPLETADO"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_STATUS_INVALID), ex.Error.ErrorCode);
+    }
 }
