@@ -14,7 +14,7 @@ public interface IAppointmentQueryService
     // compara los dos para decidir el 403, no el controller.
     Task<IEnumerable<AppointmentModel.Response>> GetByPatient(string dni, ClaimsPrincipal user);
 
-    Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination);
+    Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination, string? status = null);
 
     Task<Pagination<AppointmentModel.SearchResponse>> Search(
         Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination);
