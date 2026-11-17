@@ -348,6 +348,7 @@ inválido, `to` es anterior a `from` o el rango supera 31 días, responde `400`
 |--------|------|--------|-----------|
 | `POST` | `/api/availabilities` | 👤 | `201` el schedule resultante |
 | `PUT` | `/api/availabilities` | 👤 | `200` el schedule resultante |
+| `PUT` | `/api/availabilities/slots/{id}/status` | 👤 | `200` el turno de 30 minutos con su nuevo estado |
 
 Configura la agenda mensual de un médico. El sistema genera los turnos disponibles
 (*slots*) a partir de los días y horarios indicados, salteando los feriados definidos en
@@ -361,6 +362,14 @@ adelantado, el request acepta `year` y `month` (opcionales, van juntos): por eje
 `"year": 2026, "month": 11`. No se aceptan meses pasados ni más de 12 meses adelante
 (`400` `AVAILABILITY_MONTH_INVALID`). En un mes futuro los turnos se generan desde el día 1.
 `GET /api/doctors/{id}/availabilities?year=&month=` devuelve la agenda de ese mes.
+
+**`PUT /api/availabilities/slots/{id}/status`** — bloquea o libera un turno de 30 minutos
+puntual (por ejemplo, el médico no puede atender a esa hora). Body:
+`{ "status": "BLOCKED" }` o `{ "status": "AVAILABLE" }`. Un turno bloqueado no se puede
+reservar. Responde `400` `SLOT_STATUS_INVALID` con otro valor, `404`
+`APPOINTMENT_SLOT_NOT_FOUND` si no existe y `409` `SLOT_BOOKED` si tiene un turno
+reservado (primero hay que cancelarlo). Ojo: un `PUT /api/availabilities` posterior
+regenera los turnos libres futuros del mes, y eso incluye los bloqueados.
 
 ```jsonc
 // request

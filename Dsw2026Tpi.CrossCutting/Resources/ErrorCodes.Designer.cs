@@ -464,5 +464,23 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("SLOT_RANGE_INVALID", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Un horario solo se puede pasar a BLOCKED o a AVAILABLE.
+        /// </summary>
+        public static string SLOT_STATUS_INVALID {
+            get {
+                return ResourceManager.GetString("SLOT_STATUS_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El horario tiene un turno reservado: primero hay que cancelar el turno.
+        /// </summary>
+        public static string SLOT_BOOKED {
+            get {
+                return ResourceManager.GetString("SLOT_BOOKED", resourceCulture);
+            }
+        }
     }
 }

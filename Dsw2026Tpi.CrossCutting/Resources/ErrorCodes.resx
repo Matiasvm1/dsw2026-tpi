@@ -252,4 +252,10 @@
   <data name="SLOT_RANGE_INVALID" xml:space="preserve">
     <value>El rango de fechas es inválido: use el formato YYYY-MM-DD, 'to' no puede ser anterior a 'from' y el rango no puede superar 31 días</value>
   </data>
+  <data name="SLOT_STATUS_INVALID" xml:space="preserve">
+    <value>Un horario solo se puede pasar a BLOCKED o a AVAILABLE</value>
+  </data>
+  <data name="SLOT_BOOKED" xml:space="preserve">
+    <value>El horario tiene un turno reservado: primero hay que cancelar el turno</value>
+  </data>
 </root>

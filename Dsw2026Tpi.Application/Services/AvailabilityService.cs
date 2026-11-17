@@ -147,6 +147,43 @@ public class AvailabilityService : IAvailabilityService
         return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
+    // Bloqueo manual de un horario (por ejemplo, el médico no puede atender esa hora). El dominio ya
+    // tenía AvailabilitySlot.Block() y el estado BLOCKED (modelo de datos, p. 11) sin forma de usarlos.
+    // Un horario reservado no se toca: primero se cancela el turno (CU03). Bloquear algo ya bloqueado
+    // (o liberar algo libre) no es un error: el resultado pedido ya se cumple.
+    public async Task<DoctorModel.SlotResponse> UpdateSlotStatus(Guid slotId, string status)
+    {
+        var newStatus = (status ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "BLOCKED" => SlotStatus.Blocked,
+            "AVAILABLE" => SlotStatus.Available,
+            _ => throw new ValidationException(nameof(ErrorCodes.SLOT_STATUS_INVALID), ErrorCodes.SLOT_STATUS_INVALID)
+                .WithDetail("status", "expected_BLOCKED_or_AVAILABLE")
+        };
+
+        var slot = await _persistence.GetById<AvailabilitySlot>(slotId)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND), ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND);
+
+        if (slot.Status == SlotStatus.Booked)
+            throw new BusinessRuleException(nameof(ErrorCodes.SLOT_BOOKED), ErrorCodes.SLOT_BOOKED);
+
+        if (newStatus == SlotStatus.Blocked)
+            slot.Block();
+        else
+            slot.Release();
+
+        await _persistence.Update(slot);
+
+        _logger.LogInformation("El horario {SlotId} quedó en estado {Status}", slotId, newStatus);
+
+        return new DoctorModel.SlotResponse(
+            slot.Id,
+            slot.SlotDate.ToString("yyyy-MM-dd"),
+            slot.StartTime.ToString("HH\\:mm"),
+            slot.EndTime.ToString("HH\\:mm"),
+            slot.Status.ToString().ToUpperInvariant());
+    }
+
     #region Helpers & Validations
 
     // Mes sobre el que se genera: el actual si no vienen year/month (contrato original), o el que
