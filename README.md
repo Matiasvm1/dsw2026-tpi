@@ -243,8 +243,11 @@ paciente; si no viene, el nombre que ya tenga no se modifica.
 { "email": "paciente@mail.com", "dni": 12345678, "fullName": "Juan Pérez" }
 
 // 200 OK
-{ "token": "eyJhbGciOi...", "role": "PACIENTE" }
+{ "token": "eyJhbGciOi...", "role": "PACIENTE", "dni": 12345678, "patientId": "5b8c..." }
 ```
+
+`dni` y `patientId` vienen en la respuesta para que el frontend no tenga que decodificar
+el JWT: el `dni` es el que piden `GET /api/appointments/patient?dni=` y la reserva.
 
 **`POST /api/auth/admin/register`** — devuelve `200 OK` con el email creado.
 

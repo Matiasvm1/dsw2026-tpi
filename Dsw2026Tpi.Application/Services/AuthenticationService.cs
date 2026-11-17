@@ -126,7 +126,7 @@ public class AuthenticationService : IAuthenticationService
 
         var token = _jwtService.GenerateToken(user.UserName!, Roles.Patient, patient.Id, patient.Dni);
 
-        return new LoginPatientModel.Response(token, Roles.ToResponse(Roles.Patient));
+        return new LoginPatientModel.Response(token, Roles.ToResponse(Roles.Patient), request.Dni, patient.Id);
     }
 
     /// <summary>

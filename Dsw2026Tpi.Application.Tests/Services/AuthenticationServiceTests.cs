@@ -227,4 +227,31 @@ public class AuthenticationServiceTests
         Assert.Equal("Juan Pérez", patient.FullName);
         _persistence.Verify(p => p.Update(It.IsAny<Patient>()), Times.Never);
     }
+
+    // ---------------------------------------------------------------- LoginPatient: dni y patientId
+
+    [Fact]
+    public async Task LoginPatient_Autorregistro_DevuelveDniYPatientId()
+    {
+        ArrangeSelfRegister();
+        Patient? saved = null;
+        _persistence.Setup(p => p.Add(It.IsAny<Patient>()))
+            .Callback<Patient>(p => saved = p).ReturnsAsync((Patient p) => p);
+
+        var result = await _sut.LoginPatient(new LoginPatientModel.Request("nuevo@test.com", 12345678));
+
+        Assert.Equal(12345678, result.Dni);
+        Assert.Equal(saved!.Id, result.PatientId);
+    }
+
+    [Fact]
+    public async Task LoginPatient_PacienteExistente_DevuelveSuDniYSuPatientId()
+    {
+        var patient = ArrangeExistingPatient();
+
+        var result = await _sut.LoginPatient(new LoginPatientModel.Request("pac@test.com", 12345678));
+
+        Assert.Equal(12345678, result.Dni);
+        Assert.Equal(patient.Id, result.PatientId);
+    }
 }
