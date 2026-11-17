@@ -133,6 +133,109 @@ public class DoctorServiceTests
         Assert.Equal(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ex.Error.ErrorCode);
     }
 
+    // ---------------------------------------------------------------- GetSlots
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+
+    private void SetupExistingDoctor(Doctor doctor) =>
+        _persistence.Setup(p => p.GetById<Doctor>(doctor.Id, It.IsAny<string[]>())).ReturnsAsync(doctor);
+
+    // Devuelve los slots indicados y guarda el predicado de GetFiltered para poder evaluarlo.
+    private Func<AvailabilitySlot, bool> SetupSlots(params AvailabilitySlot[] slots)
+    {
+        Expression<Func<AvailabilitySlot, bool>>? captured = null;
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()))
+            .Callback<Expression<Func<AvailabilitySlot, bool>>, string[]>((predicate, _) => captured = predicate)
+            .ReturnsAsync(slots);
+
+        return slot => captured!.Compile()(slot);
+    }
+
+    [Fact]
+    public async Task GetSlots_MedicoInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((Doctor?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => _sut.GetSlots(Guid.NewGuid(), null, null));
+        Assert.Equal(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("10/08/2026", null)]
+    [InlineData(null, "2026-13-01")]
+    public async Task GetSlots_FechaConFormatoInvalido_Lanza400(string? from, string? to)
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupExistingDoctor(doctor);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.GetSlots(doctor.Id, from, to));
+        Assert.Equal(nameof(ErrorCodes.SLOT_RANGE_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetSlots_HastaAnteriorADesde_Lanza400()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupExistingDoctor(doctor);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.GetSlots(doctor.Id, "2026-08-10", "2026-08-09"));
+        Assert.Equal(nameof(ErrorCodes.SLOT_RANGE_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetSlots_RangoMayorA31Dias_Lanza400()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupExistingDoctor(doctor);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(
+            () => _sut.GetSlots(doctor.Id, "2026-08-01", "2026-09-01"));
+        Assert.Equal(nameof(ErrorCodes.SLOT_RANGE_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetSlots_SinFechas_ConsultaDesdeHoyLosProximos7Dias()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupExistingDoctor(doctor);
+        var predicate = SetupSlots();
+
+        await _sut.GetSlots(doctor.Id, null, null);
+
+        Assert.True(predicate(TestData.MakeSlot(doctor.Id, date: Today)));
+        Assert.True(predicate(TestData.MakeSlot(doctor.Id, date: Today.AddDays(6))));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: Today.AddDays(7))));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: Today.AddDays(-1))));
+        Assert.False(predicate(TestData.MakeSlot(Guid.NewGuid(), date: Today)));
+    }
+
+    [Fact]
+    public async Task GetSlots_DevuelveSoloFuturosOrdenadosYConSuEstado()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupExistingDoctor(doctor);
+        var tomorrow = Today.AddDays(1);
+        var past = TestData.MakeSlot(doctor.Id, date: Today.AddDays(-1));
+        var booked = TestData.MakeSlot(doctor.Id, date: tomorrow, start: new TimeOnly(9, 30), status: SlotStatus.Booked);
+        var available = TestData.MakeSlot(doctor.Id, date: tomorrow, start: new TimeOnly(9, 0));
+        SetupSlots(booked, past, available);
+
+        var result = (await _sut.GetSlots(doctor.Id, null, null)).ToList();
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(available.Id, result[0].Id);
+        Assert.Equal(tomorrow.ToString("yyyy-MM-dd"), result[0].Date);
+        Assert.Equal("09:00", result[0].StartTime);
+        Assert.Equal("09:30", result[0].EndTime);
+        Assert.Equal("AVAILABLE", result[0].Status);
+        Assert.Equal(booked.Id, result[1].Id);
+        Assert.Equal("BOOKED", result[1].Status);
+    }
+
     [Fact]
     public async Task GetAvailabilities_DevuelveLasReglasEnEspañol()
     {
