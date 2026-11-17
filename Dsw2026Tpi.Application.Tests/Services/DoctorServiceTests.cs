@@ -117,6 +117,95 @@ public class DoctorServiceTests
         _persistence.Verify(p => p.GetById<Doctor>(doctor.Id, new[] { nameof(Doctor.Speciality) }), Times.Once);
     }
 
+    // ---------------------------------------------------------------- HasAvailability
+
+    private void SetupDoctorsPage(params Doctor[] doctors) =>
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Doctor, bool>>>(),
+                It.IsAny<Expression<Func<Doctor, string>>>(),
+                It.IsAny<string[]>()))
+            .ReturnsAsync(new Pagination<Doctor>(10, 1, doctors.Length, doctors));
+
+    // Devuelve los slots indicados y guarda el predicado para poder evaluarlo en memoria.
+    private Func<AvailabilitySlot, bool> SetupAvailableSlots(params AvailabilitySlot[] slots)
+    {
+        Expression<Func<AvailabilitySlot, bool>>? captured = null;
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()))
+            .Callback<Expression<Func<AvailabilitySlot, bool>>, string[]>((predicate, _) => captured = predicate)
+            .ReturnsAsync(slots);
+
+        return slot => captured!.Compile()(slot);
+    }
+
+    [Fact]
+    public async Task GetAll_MarcaHasAvailabilitySoloEnLosMedicosConTurnosDisponibles()
+    {
+        var withSchedule = TestData.MakeDoctor(Guid.NewGuid(), name: "Dr Con Agenda");
+        var withoutSchedule = TestData.MakeDoctor(Guid.NewGuid(), name: "Dr Sin Agenda");
+        SetupDoctorsPage(withSchedule, withoutSchedule);
+        SetupAvailableSlots(TestData.MakeSlot(withSchedule.Id));
+
+        var result = await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(result.Data.Single(d => d.Id == withSchedule.Id).HasAvailability);
+        Assert.False(result.Data.Single(d => d.Id == withoutSchedule.Id).HasAvailability);
+    }
+
+    [Fact]
+    public async Task GetAll_SoloCuentaSlotsDisponiblesYFuturosDeLosMedicosDeLaPagina()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupDoctorsPage(doctor);
+        var predicate = SetupAvailableSlots();
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow, status: SlotStatus.Booked)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow, status: SlotStatus.Blocked)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: yesterday)));
+        Assert.False(predicate(TestData.MakeSlot(Guid.NewGuid(), date: tomorrow)));
+    }
+
+    [Fact]
+    public async Task GetAll_PaginaVacia_NoConsultaLosSlots()
+    {
+        SetupDoctorsPage();
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        _persistence.Verify(p => p.GetFiltered(
+            It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetById_MedicoConTurnosDisponibles_HasAvailabilityTrue()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(doctor.Id, It.IsAny<string[]>())).ReturnsAsync(doctor);
+        SetupAvailableSlots(TestData.MakeSlot(doctor.Id));
+
+        var result = await _sut.GetById(doctor.Id);
+
+        Assert.True(result.HasAvailability);
+    }
+
+    [Fact]
+    public async Task Create_MedicoNuevo_NoTieneAgenda()
+    {
+        var spec = TestData.MakeSpeciality();
+        _persistence.Setup(p => p.GetById<Speciality>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(spec);
+        _persistence.Setup(p => p.Add(It.IsAny<Doctor>())).ReturnsAsync((Doctor d) => d);
+
+        var result = await _sut.Create(Req(spec.Id));
+
+        Assert.False(result.HasAvailability);
+    }
+
     // ---------------------------------------------------------------- Delete
 
     [Fact]

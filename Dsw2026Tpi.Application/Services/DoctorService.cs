@@ -46,6 +46,9 @@ public class DoctorService : IDoctorService
      d.Name.Contains(normalizedName)) &&
      (specialtyId == null || d.SpecialityId == specialtyId), x => x.Name, nameof(Doctor.Speciality));
 
+        // Una sola consulta para toda la página, no una por médico (evita el N+1).
+        var withAvailability = await GetDoctorsWithAvailability(doctors.Data.Select(d => d.Id).ToList());
+
         return doctors.Map(d => new DoctorModel.Response(
      d.Id,
      d.Name,
@@ -54,7 +57,28 @@ public class DoctorService : IDoctorService
          ? null
          : new DoctorModel.SpecialityDto(
              d.Speciality.Id,
-             d.Speciality.Name)));
+             d.Speciality.Name),
+     withAvailability.Contains(d.Id)));
+    }
+
+    // "Estado de disponibilidad" del front, calculado y no guardado: un campo guardado podría
+    // contradecir a los slots ("Activo" sin agenda). Un médico tiene agenda si le queda al menos
+    // un slot AVAILABLE por delante. Mismo criterio de "ahora" (UTC) que la reserva (RN04).
+    private async Task<HashSet<Guid>> GetDoctorsWithAvailability(List<Guid> doctorIds)
+    {
+        if (doctorIds.Count == 0) return [];
+
+        var nowUtc = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(nowUtc);
+        var currentTime = TimeOnly.FromDateTime(nowUtc);
+
+        var slots = await _persistence.GetFiltered<AvailabilitySlot>(
+            slot =>
+                doctorIds.Contains(slot.DoctorId) &&
+                slot.Status == SlotStatus.Available &&
+                (slot.SlotDate > today || (slot.SlotDate == today && slot.StartTime > currentTime)));
+
+        return (slots ?? []).Select(slot => slot.DoctorId).ToHashSet();
     }
 
     // Detalle de un médico para el botón "ver" y el formulario de edición del front. Devuelve la
@@ -65,6 +89,8 @@ public class DoctorService : IDoctorService
         var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality))
             ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
+        var withAvailability = await GetDoctorsWithAvailability([doctor.Id]);
+
         return new DoctorModel.Response(
             doctor.Id,
             doctor.Name,
@@ -73,7 +99,8 @@ public class DoctorService : IDoctorService
                 ? null
                 : new DoctorModel.SpecialityDto(
                     doctor.Speciality.Id,
-                    doctor.Speciality.Name));
+                    doctor.Speciality.Name),
+            withAvailability.Contains(doctor.Id));
     }
 
     public async Task<DoctorModel.Response> Create(
@@ -101,13 +128,15 @@ public class DoctorService : IDoctorService
 
         await _persistence.Add(doctor);
 
+        // Un médico recién creado todavía no tiene disponibilidad cargada: no hace falta consultar.
         return new DoctorModel.Response(
             doctor.Id,
             doctor.Name,
             doctor.LicenseNumber,
             new DoctorModel.SpecialityDto(
                 speciality.Id,
-                speciality.Name));
+                speciality.Name),
+            HasAvailability: false);
     }
 
     public async Task<DoctorModel.Response> Update(
@@ -139,13 +168,16 @@ public class DoctorService : IDoctorService
 
         await _persistence.Update(doctor);
 
+        var withAvailability = await GetDoctorsWithAvailability([doctor.Id]);
+
         return new DoctorModel.Response(
             doctor.Id,
             doctor.Name,
             doctor.LicenseNumber,
             new DoctorModel.SpecialityDto(
                 speciality.Id,
-                speciality.Name));
+                speciality.Name),
+            withAvailability.Contains(doctor.Id));
     }
 
     public async Task Delete(Guid id)

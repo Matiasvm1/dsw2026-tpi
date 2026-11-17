@@ -300,9 +300,15 @@ de la paginación. El filtro por especialidad es el que usa el paciente al reser
   "id": "8c2b...",
   "name": "Dr. Pérez",
   "licenseNumber": "MP-12345",
-  "specialty": { "id": "3f1a...", "name": "Cardiología" }
+  "specialty": { "id": "3f1a...", "name": "Cardiología" },
+  "hasAvailability": true
 }
 ```
+
+`hasAvailability` indica si al médico le queda al menos un turno disponible a futuro. Se
+calcula a partir de sus turnos (no se guarda) y alimenta la columna "Estado de
+disponibilidad" del frontend ("Con agenda" / "Sin agenda"). Un médico recién creado
+siempre lo trae en `false` hasta que se le carga la disponibilidad.
 
 ```jsonc
 // GET /api/doctors/{id}/availabilities — 200 OK
