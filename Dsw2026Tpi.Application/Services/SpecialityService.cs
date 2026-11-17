@@ -41,6 +41,16 @@ public class SpecialityService : ISpecialityService
         return specialities.Map(Map);
     }
 
+    // Detalle de una especialidad para el formulario de edición del front. Las eliminadas no se
+    // encuentran (GetById ya filtra la baja lógica), así que responden 404 igual que el PUT.
+    public async Task<SpecialityModel.Response> GetById(Guid id)
+    {
+        var speciality = await _persistence.GetById<Speciality>(id)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.SPECIALTY_NOT_FOUND), ErrorCodes.SPECIALTY_NOT_FOUND);
+
+        return Map(speciality);
+    }
+
     public async Task<SpecialityModel.Response> Create(SpecialityModel.Request request)
     {
         Validate(request);

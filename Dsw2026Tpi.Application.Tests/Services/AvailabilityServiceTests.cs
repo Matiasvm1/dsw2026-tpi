@@ -187,4 +187,170 @@ public class AvailabilityServiceTests
         _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Never);    // regla idéntica: reutilizada
         Assert.Single(result.Days); // el schedule en efecto sigue siendo el MARTES 09-12 reutilizado
     }
+
+    // ---------------------------------------------------------------- Mes destino (year / month)
+
+    private static (int Year, int Month) MonthsFromNow(int months)
+    {
+        var date = DateTime.UtcNow.AddMonths(months);
+        return (date.Year, date.Month);
+    }
+
+    private static AvailabilityModel.Request ReqForMonth(int? year, int? month) =>
+        new(Guid.NewGuid(), [new AvailabilityModel.DayRequest("MARTES", "09:00", "12:00")], year, month);
+
+    private (List<AvailabilityRule> Rules, List<AvailabilitySlot> Slots) CaptureCreated()
+    {
+        var rules = new List<AvailabilityRule>();
+        var slots = new List<AvailabilitySlot>();
+        _persistence.Setup(p => p.AddRange(It.IsAny<IEnumerable<AvailabilityRule>>()))
+            .Callback<IEnumerable<AvailabilityRule>>(saved =>
+            {
+                rules.AddRange(saved);
+                slots.AddRange(saved.SelectMany(r => r.Slots));
+            })
+            .Returns(Task.CompletedTask);
+        return (rules, slots);
+    }
+
+    [Fact]
+    public async Task Create_SinAnioNiMes_UsaElMesActual()
+    {
+        DoctorExists();
+        var (rules, _) = CaptureCreated();
+        var (year, month) = MonthsFromNow(0);
+
+        var result = await _sut.Create(ReqForMonth(null, null));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+        Assert.Equal((year, month), ((int)rules.Single().Year, (int)rules.Single().Month));
+    }
+
+    [Fact]
+    public async Task Create_ConMesSiguiente_GeneraLaReglaYLosTurnosDeEseMesDesdeElDia1()
+    {
+        DoctorExists();
+        var (rules, slots) = CaptureCreated();
+        var (year, month) = MonthsFromNow(1);
+
+        var result = await _sut.Create(ReqForMonth(year, month));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+        Assert.Equal((year, month), ((int)rules.Single().Year, (int)rules.Single().Month));
+
+        // Todos los martes del mes siguiente, desde el primero, con sus 6 turnos de 30 minutos.
+        var tuesdays = Enumerable.Range(1, DateTime.DaysInMonth(year, month))
+            .Select(day => new DateOnly(year, month, day))
+            .Where(date => date.DayOfWeek == DayOfWeek.Tuesday)
+            .ToList();
+        Assert.Equal(tuesdays.Count * 6, slots.Count);
+        Assert.Equal(tuesdays.First(), slots.Min(s => s.SlotDate));
+    }
+
+    [Fact]
+    public async Task Update_ConMesSiguiente_ReconfiguraEseMes()
+    {
+        DoctorExists();
+        ExistingRules();
+        ExistingSlots();
+        var (year, month) = MonthsFromNow(1);
+
+        var result = await _sut.Update(ReqForMonth(year, month));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+    }
+
+    [Theory]
+    [InlineData(2026, null, "year_and_month_required_together")]
+    [InlineData(null, 5, "year_and_month_required_together")]
+    [InlineData(2026, 13, "month_between_1_and_12")]
+    [InlineData(2026, 0, "month_between_1_and_12")]
+    public async Task Create_AnioOMesInvalido_Lanza400(int? year, int? month, string issue)
+    {
+        DoctorExists();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.Create(ReqForMonth(year, month)));
+
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
+        Assert.Equal(issue, ex.Error.Details.Single().Issue);
+    }
+
+    [Theory]
+    [InlineData(-1, "month_in_the_past")]
+    [InlineData(13, "month_max_12_ahead")]
+    public async Task Create_MesPasadoOMuyLejano_Lanza400(int monthsFromNow, string issue)
+    {
+        DoctorExists();
+        var (year, month) = MonthsFromNow(monthsFromNow);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.Create(ReqForMonth(year, month)));
+
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
+        Assert.Equal(issue, ex.Error.Details.Single().Issue);
+    }
+
+    // ---------------------------------------------------------------- Bloqueo manual de slots
+
+    private AvailabilitySlot ArrangeSlot(SlotStatus status)
+    {
+        var slot = TestData.MakeSlot(Guid.NewGuid(), status: status);
+        _persistence.Setup(p => p.GetById<AvailabilitySlot>(slot.Id, It.IsAny<string[]>())).ReturnsAsync(slot);
+        _persistence.Setup(p => p.Update(It.IsAny<AvailabilitySlot>())).ReturnsAsync((AvailabilitySlot s) => s);
+        return slot;
+    }
+
+    [Theory]
+    [InlineData("BOOKED")]
+    [InlineData("LIBRE")]
+    public async Task UpdateSlotStatus_EstadoNoPermitido_Lanza400(string status)
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.UpdateSlotStatus(Guid.NewGuid(), status));
+        Assert.Equal(nameof(ErrorCodes.SLOT_STATUS_INVALID), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_SlotInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<AvailabilitySlot>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((AvailabilitySlot?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.UpdateSlotStatus(Guid.NewGuid(), "BLOCKED"));
+        Assert.Equal(nameof(ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_SlotReservado_Lanza409YNoLoModifica()
+    {
+        var slot = ArrangeSlot(SlotStatus.Booked);
+
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.UpdateSlotStatus(slot.Id, "BLOCKED"));
+
+        Assert.Equal(nameof(ErrorCodes.SLOT_BOOKED), ex.Error.ErrorCode);
+        Assert.Equal(SlotStatus.Booked, slot.Status);
+        _persistence.Verify(p => p.Update(It.IsAny<AvailabilitySlot>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_Blocked_BloqueaElSlotYLoDevuelve()
+    {
+        var slot = ArrangeSlot(SlotStatus.Available);
+
+        var result = await _sut.UpdateSlotStatus(slot.Id, "blocked");
+
+        Assert.Equal(SlotStatus.Blocked, slot.Status);
+        Assert.Equal(slot.Id, result.Id);
+        Assert.Equal("BLOCKED", result.Status);
+        _persistence.Verify(p => p.Update(slot), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSlotStatus_Available_DesbloqueaUnSlotBloqueado()
+    {
+        var slot = ArrangeSlot(SlotStatus.Blocked);
+
+        var result = await _sut.UpdateSlotStatus(slot.Id, "AVAILABLE");
+
+        Assert.Equal(SlotStatus.Available, slot.Status);
+        Assert.Equal("AVAILABLE", result.Status);
+    }
 }

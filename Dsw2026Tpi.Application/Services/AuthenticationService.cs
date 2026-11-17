@@ -16,6 +16,8 @@ public class AuthenticationService : IAuthenticationService
 {
     private const int DniMinLength = 7;
     private const int DniMaxLength = 8; // Contrato: el login de paciente admite DNI de 7 u 8 dígitos.
+    private const int FullNameMinLength = 3;
+    private const int FullNameMaxLength = 150; // full_name varchar(150) en el modelo de datos.
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ISignInService _signInManager;
@@ -92,28 +94,46 @@ public class AuthenticationService : IAuthenticationService
                 .WithDetail("dni", $"length_between_{DniMinLength}_and_{DniMaxLength}");
         }
 
+        // fullName es opcional: si viene, se valida y se guarda; si no viene, no se toca el nombre
+        // que el paciente ya tenga. Así la búsqueda avanzada del admin puede mostrar nombres.
+        var fullName = request.FullName?.Trim();
+        if (request.FullName is not null && fullName!.Length is < FullNameMinLength or > FullNameMaxLength)
+        {
+            throw new ValidationException(
+                    nameof(ErrorCodes.PATIENT_FULLNAME_LENGTH),
+                    ErrorCodes.PATIENT_FULLNAME_LENGTH)
+                .WithDetail("fullName", $"length_between_{FullNameMinLength}_and_{FullNameMaxLength}");
+        }
+
         var user = await _userManager.FindByEmailAsync(request.Email);
         Patient patient;
 
         if (user is null)
         {
-            (user, patient) = await SelfRegister(request.Email, dni);
+            (user, patient) = await SelfRegister(request.Email, dni, fullName);
         }
         else
         {
             patient = await AuthenticatePatient(user, dni);
+
+            // Se actualiza solo después de autenticar: un DNI equivocado no puede cambiar el nombre.
+            if (fullName is not null && fullName != patient.FullName)
+            {
+                patient.UpdateFullName(fullName);
+                await _persistence.Update(patient);
+            }
         }
 
         var token = _jwtService.GenerateToken(user.UserName!, Roles.Patient, patient.Id, patient.Dni);
 
-        return new LoginPatientModel.Response(token, Roles.ToResponse(Roles.Patient));
+        return new LoginPatientModel.Response(token, Roles.ToResponse(Roles.Patient), request.Dni, patient.Id);
     }
 
     /// <summary>
     /// Autorregistro del paciente (RN06): el primer login con un email desconocido crea el usuario
     /// y el paciente.
     /// </summary>
-    private async Task<(ApplicationUser User, Patient Patient)> SelfRegister(string email, string dni)
+    private async Task<(ApplicationUser User, Patient Patient)> SelfRegister(string email, string dni, string? fullName)
     {
         // El DNI identifica a una persona y tiene índice único en la base: si ya está tomado por
         // otro email, esto no es un alta nueva sino un par de credenciales que no corresponde.
@@ -151,9 +171,9 @@ public class AuthenticationService : IAuthenticationService
                 ErrorCodes.REGISTER_USER_CONFLICT)
                     .WithDetail(roleResult.Errors.Select(e => (e.Code, e.Description)));
 
-            // FullName queda en NULL (D35): el login no manda ningún nombre y no hay que
-            // inventarle uno al paciente.
-            var patient = await _persistence.Add(new Patient(user.Id, dni));
+            // FullName queda en NULL si el login no lo manda (D35): no hay que inventarle uno al
+            // paciente. Si lo manda, ya viene validado y sin espacios de más.
+            var patient = await _persistence.Add(new Patient(user.Id, dni, fullName));
 
             _logger.LogInformation("Paciente autorregistrado: {Email}", email);
 

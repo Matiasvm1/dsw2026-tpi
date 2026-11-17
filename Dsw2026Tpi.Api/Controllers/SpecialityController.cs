@@ -34,6 +34,15 @@ public class SpecialityController : AppController // Heredamos de AppController 
         return Ok(result);
     }
 
+    // Igual que el GET del listado: solo pide estar logueado. Lo usa el formulario de edición.
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        return Ok(await _service.GetById(id));
+    }
+
     [HttpPost]
     [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status201Created)]

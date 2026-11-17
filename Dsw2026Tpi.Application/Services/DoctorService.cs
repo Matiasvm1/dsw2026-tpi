@@ -23,7 +23,9 @@ public class DoctorService : IDoctorService
     // copian esta forma. Sin filtro no se pasa null, se pasa un predicado que siempre da true.
     // Contains va pelado, sin StringComparison: EF no lo traduce a SQL y falla en ejecución.
     // El case-insensitive lo aporta la collation de SQL Server.
-    public async Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null)
+    // specialtyId es el filtro del CU01 (paso 1-2): el paciente elige la especialidad y solo ve
+    // los médicos asociados. Mismo patrón "filtro == null || condición" que el nombre.
+    public async Task<Pagination<DoctorModel.Response>> GetAll(PaginationQuery pagination, string? name = null, Guid? specialtyId = null)
     {
         if (name is not null &&
     (string.IsNullOrWhiteSpace(name) ||
@@ -40,8 +42,12 @@ public class DoctorService : IDoctorService
         var normalizedName = name?.Trim();
 
         var doctors = await _persistence.Paginate<Doctor, string>(pagination.PageSize, pagination.PageIndex,
-                                                   d => normalizedName == null ||
-     d.Name.Contains(normalizedName), x => x.Name, nameof(Doctor.Speciality));
+                                                   d => (normalizedName == null ||
+     d.Name.Contains(normalizedName)) &&
+     (specialtyId == null || d.SpecialityId == specialtyId), x => x.Name, nameof(Doctor.Speciality));
+
+        // Una sola consulta para toda la página, no una por médico (evita el N+1).
+        var withAvailability = await GetDoctorsWithAvailability(doctors.Data.Select(d => d.Id).ToList());
 
         return doctors.Map(d => new DoctorModel.Response(
      d.Id,
@@ -51,7 +57,50 @@ public class DoctorService : IDoctorService
          ? null
          : new DoctorModel.SpecialityDto(
              d.Speciality.Id,
-             d.Speciality.Name)));
+             d.Speciality.Name),
+     withAvailability.Contains(d.Id)));
+    }
+
+    // "Estado de disponibilidad" del front, calculado y no guardado: un campo guardado podría
+    // contradecir a los slots ("Activo" sin agenda). Un médico tiene agenda si le queda al menos
+    // un slot AVAILABLE por delante. Mismo criterio de "ahora" (UTC) que la reserva (RN04).
+    private async Task<HashSet<Guid>> GetDoctorsWithAvailability(List<Guid> doctorIds)
+    {
+        if (doctorIds.Count == 0) return [];
+
+        var nowUtc = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(nowUtc);
+        var currentTime = TimeOnly.FromDateTime(nowUtc);
+
+        var slots = await _persistence.GetFiltered<AvailabilitySlot>(
+            slot =>
+                doctorIds.Contains(slot.DoctorId) &&
+                slot.Status == SlotStatus.Available &&
+                (slot.SlotDate > today || (slot.SlotDate == today && slot.StartTime > currentTime)));
+
+        return (slots ?? []).Select(slot => slot.DoctorId).ToHashSet();
+    }
+
+    // Detalle de un médico para el botón "ver" y el formulario de edición del front. Devuelve la
+    // misma forma que cada elemento del listado (TFI p. 16) e incluye la especialidad, porque
+    // sin el Include la navegación llega null y el JSON saldría con "specialty": null.
+    public async Task<DoctorModel.Response> GetById(Guid id)
+    {
+        var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality))
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
+
+        var withAvailability = await GetDoctorsWithAvailability([doctor.Id]);
+
+        return new DoctorModel.Response(
+            doctor.Id,
+            doctor.Name,
+            doctor.LicenseNumber,
+            doctor.Speciality is null
+                ? null
+                : new DoctorModel.SpecialityDto(
+                    doctor.Speciality.Id,
+                    doctor.Speciality.Name),
+            withAvailability.Contains(doctor.Id));
     }
 
     public async Task<DoctorModel.Response> Create(
@@ -79,13 +128,15 @@ public class DoctorService : IDoctorService
 
         await _persistence.Add(doctor);
 
+        // Un médico recién creado todavía no tiene disponibilidad cargada: no hace falta consultar.
         return new DoctorModel.Response(
             doctor.Id,
             doctor.Name,
             doctor.LicenseNumber,
             new DoctorModel.SpecialityDto(
                 speciality.Id,
-                speciality.Name));
+                speciality.Name),
+            HasAvailability: false);
     }
 
     public async Task<DoctorModel.Response> Update(
@@ -117,13 +168,16 @@ public class DoctorService : IDoctorService
 
         await _persistence.Update(doctor);
 
+        var withAvailability = await GetDoctorsWithAvailability([doctor.Id]);
+
         return new DoctorModel.Response(
             doctor.Id,
             doctor.Name,
             doctor.LicenseNumber,
             new DoctorModel.SpecialityDto(
                 speciality.Id,
-                speciality.Name));
+                speciality.Name),
+            withAvailability.Contains(doctor.Id));
     }
 
     public async Task Delete(Guid id)
@@ -135,19 +189,21 @@ public class DoctorService : IDoctorService
     }
 
 
+    // Sin year/month devuelve el mes actual (contrato, p. 17). Con ellos, la agenda de ese mes: la
+    // pantalla de disponibilidad del admin la necesita para ver o editar el mes siguiente.
     public async Task<IEnumerable<DoctorModel.AvailabilityResponse>>
-    GetAvailabilities(Guid doctorId)
+    GetAvailabilities(Guid doctorId, int? year = null, int? month = null)
     {
         var doctor = await _persistence.GetById<Doctor>(doctorId)
             ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var (targetYear, targetMonth) = MonthSelection.Resolve(year, month, DateTime.UtcNow);
 
         var rules = await _persistence.GetFiltered<AvailabilityRule>(
             rule =>
                 rule.DoctorId == doctorId &&
-                rule.Year == today.Year &&
-                rule.Month == today.Month);
+                rule.Year == targetYear &&
+                rule.Month == targetMonth);
 
         return rules!
             .OrderBy(rule =>

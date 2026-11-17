@@ -138,4 +138,29 @@ public class SpecialityServiceTests
             () => _sut.GetAll(new PaginationQuery(null, null), "AB"));
         Assert.Equal(nameof(ErrorCodes.SPECIALTY_NAME_LENGTH), ex.Error.ErrorCode);
     }
+
+    // ---------------------------------------------------------------- GetById
+
+    [Fact]
+    public async Task GetById_Inexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<Speciality>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((Speciality?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.GetById(Guid.NewGuid()));
+        Assert.Equal(nameof(ErrorCodes.SPECIALTY_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetById_Existente_DevuelveLaEspecialidad()
+    {
+        var spec = TestData.MakeSpeciality();
+        _persistence.Setup(p => p.GetById<Speciality>(spec.Id, It.IsAny<string[]>())).ReturnsAsync(spec);
+
+        var result = await _sut.GetById(spec.Id);
+
+        Assert.Equal(spec.Id, result.Id);
+        Assert.Equal(spec.Name, result.Name);
+        Assert.Equal(spec.Description, result.Description);
+    }
 }

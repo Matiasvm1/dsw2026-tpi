@@ -6,4 +6,5 @@ public interface IAvailabilityService
 {
     Task<AvailabilityModel.Response> Create(AvailabilityModel.Request request);
     Task<AvailabilityModel.Response> Update(AvailabilityModel.Request request);
+    Task<DoctorModel.SlotResponse> UpdateSlotStatus(Guid slotId, string status);
 }

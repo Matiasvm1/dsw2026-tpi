@@ -77,6 +77,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("APPOINTMENT_DATE_INVALID", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El estado del turno es inválido. Valores posibles: BOOKED, CANCELLED, ATTENDED, NO_SHOW.
+        /// </summary>
+        public static string APPOINTMENT_STATUS_INVALID {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_STATUS_INVALID", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a El horario seleccionado no pertenece al médico indicado.
@@ -111,6 +120,33 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string APPOINTMENT_NOT_CANCELLABLE {
             get {
                 return ResourceManager.GetString("APPOINTMENT_NOT_CANCELLABLE", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Solo se puede registrar un turno como ATTENDED o NO_SHOW.
+        /// </summary>
+        public static string APPOINTMENT_OUTCOME_INVALID {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_OUTCOME_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Solo se puede registrar la asistencia de un turno reservado.
+        /// </summary>
+        public static string APPOINTMENT_NOT_BOOKED {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_BOOKED", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a No se puede registrar la asistencia de un turno que todavía no empezó.
+        /// </summary>
+        public static string APPOINTMENT_NOT_STARTED {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_STARTED", resourceCulture);
             }
         }
         
@@ -158,6 +194,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("AUTHENTICATION_FAILED", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Debe iniciar sesión para acceder a este recurso, o la sesión expiró.
+        /// </summary>
+        public static string AUTHENTICATION_REQUIRED {
+            get {
+                return ResourceManager.GetString("AUTHENTICATION_REQUIRED", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a Se requieren permisos para la operación solicitada.
@@ -201,6 +246,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string AVAILABILITY_INVALID_RANGE {
             get {
                 return ResourceManager.GetString("AVAILABILITY_INVALID_RANGE", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El mes indicado es inválido: year y month van juntos, month entre 1 y 12, y no puede ser un mes pasado ni estar a más de 12 meses.
+        /// </summary>
+        public static string AVAILABILITY_MONTH_INVALID {
+            get {
+                return ResourceManager.GetString("AVAILABILITY_MONTH_INVALID", resourceCulture);
             }
         }
         
@@ -273,6 +327,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string PATIENT_DNI_INVALID {
             get {
                 return ResourceManager.GetString("PATIENT_DNI_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El nombre completo debe tener entre 3 y 150 caracteres.
+        /// </summary>
+        public static string PATIENT_FULLNAME_LENGTH {
+            get {
+                return ResourceManager.GetString("PATIENT_FULLNAME_LENGTH", resourceCulture);
             }
         }
         
@@ -399,6 +462,24 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string SLOT_RANGE_INVALID {
             get {
                 return ResourceManager.GetString("SLOT_RANGE_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a Un horario solo se puede pasar a BLOCKED o a AVAILABLE.
+        /// </summary>
+        public static string SLOT_STATUS_INVALID {
+            get {
+                return ResourceManager.GetString("SLOT_STATUS_INVALID", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El horario tiene un turno reservado: primero hay que cancelar el turno.
+        /// </summary>
+        public static string SLOT_BOOKED {
+            get {
+                return ResourceManager.GetString("SLOT_BOOKED", resourceCulture);
             }
         }
     }

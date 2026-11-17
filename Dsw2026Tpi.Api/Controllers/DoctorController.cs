@@ -20,10 +20,20 @@ public class DoctorController : AppController
 
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery]int? pageSize, [FromQuery]int? pageIndex, [FromQuery]string? name = null)
+    public async Task<IActionResult> GetAll([FromQuery]int? pageSize, [FromQuery]int? pageIndex, [FromQuery]string? name = null, [FromQuery]Guid? specialtyId = null)
     {
-        var doctors = await _service.GetAll(new PaginationQuery(pageSize, pageIndex), name);
+        var doctors = await _service.GetAll(new PaginationQuery(pageSize, pageIndex), name, specialtyId);
         return Ok(doctors);
+    }
+
+    // Lo usa el front para el botón "ver" y para recargar el formulario de edición.
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var doctor = await _service.GetById(id);
+        return Ok(doctor);
     }
 
     [HttpPost]
@@ -62,9 +72,9 @@ public class DoctorController : AppController
 
     [HttpGet("{id:guid}/availabilities")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAvailabilities(Guid id)
+    public async Task<IActionResult> GetAvailabilities(Guid id, [FromQuery] int? year = null, [FromQuery] int? month = null)
     {
-        var availabilities = await _service.GetAvailabilities(id);
+        var availabilities = await _service.GetAvailabilities(id, year, month);
         return Ok(availabilities);
     }
 

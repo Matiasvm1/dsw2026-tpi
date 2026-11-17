@@ -26,8 +26,7 @@ public class AvailabilityService : IAvailabilityService
     public async Task<AvailabilityModel.Response> Create(AvailabilityModel.Request request)
     {
         var now = DateTime.UtcNow;
-        var currentYear = (short)now.Year;
-        var currentMonth = (byte)now.Month;
+        var (currentYear, currentMonth, from) = ResolveTargetMonth(request, now);
 
         var doctor = await _persistence.GetDoctorWithAvailabilityRules(request.DoctorId, currentYear, currentMonth)
             ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
@@ -50,7 +49,7 @@ public class AvailabilityService : IAvailabilityService
             var rule = doctor.AddAvailability(currentYear, currentMonth, dayReq.DayOfWeek, dayReq.StartTime, dayReq.EndTime);
             effectiveRules.Add(rule);
 
-            slotsCreated += rule.GenerateSlots(DateOnly.FromDateTime(now), now, nonWorkingDays).Count;
+            slotsCreated += rule.GenerateSlots(from, now, nonWorkingDays).Count;
         }
 
         await _persistence.AddRange(effectiveRules);
@@ -69,8 +68,7 @@ public class AvailabilityService : IAvailabilityService
         var parsedDays = ParseAndValidatePayloadDays(request.Days);
 
         var now = DateTime.UtcNow;
-        var currentYear = now.Year;
-        var currentMonth = now.Month;
+        var (currentYear, currentMonth, from) = ResolveTargetMonth(request, now);
 
         var existingRules = (await _persistence.GetFiltered<AvailabilityRule>(
             r => r.DoctorId == request.DoctorId && r.Year == currentYear && r.Month == currentMonth) ?? []).ToList();
@@ -136,7 +134,7 @@ public class AvailabilityService : IAvailabilityService
 
             effectiveRules.Add(rule);
 
-            var slots = rule.GenerateSlots(DateOnly.FromDateTime(now), now, nonWorkingDays, occupied);
+            var slots = rule.GenerateSlots(from, now, nonWorkingDays, occupied);
             await _persistence.AddRange(slots);
             slotsCreated += slots.Count;
         }
@@ -149,7 +147,60 @@ public class AvailabilityService : IAvailabilityService
         return BuildResponse(request.DoctorId, currentYear, currentMonth, effectiveRules);
     }
 
+    // Bloqueo manual de un horario (por ejemplo, el médico no puede atender esa hora). El dominio ya
+    // tenía AvailabilitySlot.Block() y el estado BLOCKED (modelo de datos, p. 11) sin forma de usarlos.
+    // Un horario reservado no se toca: primero se cancela el turno (CU03). Bloquear algo ya bloqueado
+    // (o liberar algo libre) no es un error: el resultado pedido ya se cumple.
+    public async Task<DoctorModel.SlotResponse> UpdateSlotStatus(Guid slotId, string status)
+    {
+        var newStatus = (status ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "BLOCKED" => SlotStatus.Blocked,
+            "AVAILABLE" => SlotStatus.Available,
+            _ => throw new ValidationException(nameof(ErrorCodes.SLOT_STATUS_INVALID), ErrorCodes.SLOT_STATUS_INVALID)
+                .WithDetail("status", "expected_BLOCKED_or_AVAILABLE")
+        };
+
+        var slot = await _persistence.GetById<AvailabilitySlot>(slotId)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND), ErrorCodes.APPOINTMENT_SLOT_NOT_FOUND);
+
+        if (slot.Status == SlotStatus.Booked)
+            throw new BusinessRuleException(nameof(ErrorCodes.SLOT_BOOKED), ErrorCodes.SLOT_BOOKED);
+
+        if (newStatus == SlotStatus.Blocked)
+            slot.Block();
+        else
+            slot.Release();
+
+        await _persistence.Update(slot);
+
+        _logger.LogInformation("El horario {SlotId} quedó en estado {Status}", slotId, newStatus);
+
+        return new DoctorModel.SlotResponse(
+            slot.Id,
+            slot.SlotDate.ToString("yyyy-MM-dd"),
+            slot.StartTime.ToString("HH\\:mm"),
+            slot.EndTime.ToString("HH\\:mm"),
+            slot.Status.ToString().ToUpperInvariant());
+    }
+
     #region Helpers & Validations
+
+    // Mes sobre el que se genera: el actual si no vienen year/month (contrato original), o el que
+    // pide el admin para cargar la agenda por adelantado. No se permiten meses pasados (RN04) ni más
+    // de 12 meses adelante (casi seguro un error de tipeo). En el mes actual los turnos arrancan hoy;
+    // en un mes futuro, desde el día 1.
+    private static (short Year, byte Month, DateOnly From) ResolveTargetMonth(AvailabilityModel.Request request, DateTime nowUtc)
+    {
+        var (year, month) = MonthSelection.Resolve(request.Year, request.Month, nowUtc);
+        var monthsAhead = MonthSelection.MonthsFromNow(year, month, nowUtc);
+
+        if (monthsAhead < 0) throw MonthSelection.Invalid("month_in_the_past");
+        if (monthsAhead > 12) throw MonthSelection.Invalid("month_max_12_ahead");
+
+        var from = monthsAhead == 0 ? DateOnly.FromDateTime(nowUtc) : new DateOnly(year, month, 1);
+        return ((short)year, (byte)month, from);
+    }
 
     // Arma el response con el schedule en efecto (una fila por día, ordenado Lunes->Domingo),
     // en el mismo formato que GET /doctors/{id}/availabilities.

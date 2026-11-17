@@ -52,27 +52,33 @@ public class AppointmentQueryService : IAppointmentQueryService
             .Select(MapToResponse);
     }
 
-    // GET /api/appointments?date=  ·  admin-only, todos los estados, ordenado por hora de inicio.
-    public async Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination)
+    // GET /api/appointments?date=&status=  ·  admin-only, ordenado por hora de inicio.
+    // Sin status devuelve todos los estados (comportamiento original). Con status=BOOKED el total
+    // es el de "Turnos confirmados para hoy" del dashboard, sin contar los cancelados.
+    public async Task<Pagination<AppointmentModel.Response>> GetByDate(string? date, PaginationQuery pagination, string? status = null)
     {
         // Sin date se usa el día de hoy; con date mal formado sale 400 APPOINTMENT_DATE_INVALID.
         var day = ParseOptionalDate(date) ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var statusFilter = ParseOptionalStatus(status);
 
         var result = await _persistence.Paginate<Appointment, TimeOnly>(
             pagination.PageSize,
             pagination.PageIndex,
-            a => a.AvailabilitySlot!.SlotDate == day,
+            a => a.AvailabilitySlot!.SlotDate == day
+              && (statusFilter == null || a.Status == statusFilter),
             a => a.AvailabilitySlot!.StartTime,
             FullGraph);
 
         return result.Map(MapToResponse);
     }
 
-    // GET /api/appointments/search  ·  admin-only, cuatro filtros opcionales y combinables.
+    // GET /api/appointments/search  ·  admin-only, cinco filtros opcionales y combinables. El estado
+    // usa el mismo parseo que GET /api/appointments?status= para aceptar los mismos valores.
     public async Task<Pagination<AppointmentModel.SearchResponse>> Search(
-        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination)
+        Guid? specialtyId, Guid? doctorId, string? dni, string? date, PaginationQuery pagination, string? status = null)
     {
         var parsedDate = ParseOptionalDate(date);
+        var statusFilter = ParseOptionalStatus(status);
 
         // Patrón "filtro == null || condición", igual que DoctorService.GetAll: EF descarta la
         // condición nula al traducir a SQL. No se arma el IQueryable a mano con ifs.
@@ -82,7 +88,8 @@ public class AppointmentQueryService : IAppointmentQueryService
             a => (specialtyId == null || a.AvailabilitySlot!.AvailabilityRule!.Doctor!.SpecialityId == specialtyId)
               && (doctorId    == null || a.AvailabilitySlot!.AvailabilityRule!.DoctorId == doctorId)
               && (dni         == null || a.Patient!.Dni == dni)
-              && (parsedDate  == null || a.AvailabilitySlot!.SlotDate == parsedDate),
+              && (parsedDate  == null || a.AvailabilitySlot!.SlotDate == parsedDate)
+              && (statusFilter == null || a.Status == statusFilter),
             a => a.AvailabilitySlot!.SlotDate,
             FullGraph);
 
@@ -105,10 +112,30 @@ public class AppointmentQueryService : IAppointmentQueryService
         return parsed;
     }
 
+    // Recibe el estado con los nombres del contrato (BOOKED, CANCELLED, ATTENDED, NO_SHOW), sin
+    // distinguir mayúsculas. No se usa Enum.TryParse: aceptaría "1" o "NoShow", que no son del contrato.
+    private static AppointmentStatus? ParseOptionalStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return null;
+
+        return status.Trim().ToUpperInvariant() switch
+        {
+            "BOOKED" => AppointmentStatus.Booked,
+            "CANCELLED" => AppointmentStatus.Cancelled,
+            "ATTENDED" => AppointmentStatus.Attended,
+            "NO_SHOW" => AppointmentStatus.NoShow,
+            _ => throw new ValidationException(
+                    nameof(ErrorCodes.APPOINTMENT_STATUS_INVALID),
+                    ErrorCodes.APPOINTMENT_STATUS_INVALID)
+                .WithDetail("status", "expected_BOOKED_CANCELLED_ATTENDED_NO_SHOW")
+        };
+    }
+
     // Mapeo defensivo (§0.2): el slot puede llegar null aunque el include esté bien escrito, si el
     // AvailabilitySlot quedó dado de baja por un PUT posterior (pasa con los cancelados que ?date=
     // sí devuelve). Todo con ?. y valores por defecto para no romper.
-    private static AppointmentModel.Response MapToResponse(Appointment a)
+    // internal: AppointmentService la reutiliza para responder el cambio de estado con la misma forma.
+    internal static AppointmentModel.Response MapToResponse(Appointment a)
     {
         var slot = a.AvailabilitySlot;
         var doctor = slot?.AvailabilityRule?.Doctor;

@@ -10,6 +10,7 @@ namespace Dsw2026Tpi.Application.Interfaces;
 public interface ISpecialityService
 {
     Task<Pagination<SpecialityModel.Response>> GetAll(PaginationQuery pagination, string? name = null);
+    Task<SpecialityModel.Response> GetById(Guid id);
     Task<SpecialityModel.Response> Create(SpecialityModel.Request request);
     Task<SpecialityModel.Response> Update(Guid id, SpecialityModel.Request request);
     Task Delete(Guid id);

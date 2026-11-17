@@ -88,6 +88,124 @@ public class DoctorServiceTests
         _persistence.Verify(p => p.Update(It.IsAny<Doctor>()), Times.Once);
     }
 
+    // ---------------------------------------------------------------- GetById
+
+    [Fact]
+    public async Task GetById_MedicoInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((Doctor?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.GetById(Guid.NewGuid()));
+        Assert.Equal(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetById_MedicoExistente_DevuelveElMedicoConSuEspecialidad()
+    {
+        var spec = TestData.MakeSpeciality();
+        var doctor = TestData.MakeDoctor(spec.Id, spec);
+        _persistence.Setup(p => p.GetById<Doctor>(doctor.Id, It.IsAny<string[]>())).ReturnsAsync(doctor);
+
+        var result = await _sut.GetById(doctor.Id);
+
+        Assert.Equal(doctor.Id, result.Id);
+        Assert.Equal("Dr House", result.Name);
+        Assert.Equal("MP12345", result.LicenseNumber);
+        Assert.Equal(spec.Id, result.Specialty!.Id);
+        Assert.Equal(spec.Name, result.Specialty.Name);
+        _persistence.Verify(p => p.GetById<Doctor>(doctor.Id, new[] { nameof(Doctor.Speciality) }), Times.Once);
+    }
+
+    // ---------------------------------------------------------------- HasAvailability
+
+    private void SetupDoctorsPage(params Doctor[] doctors) =>
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Doctor, bool>>>(),
+                It.IsAny<Expression<Func<Doctor, string>>>(),
+                It.IsAny<string[]>()))
+            .ReturnsAsync(new Pagination<Doctor>(10, 1, doctors.Length, doctors));
+
+    // Devuelve los slots indicados y guarda el predicado para poder evaluarlo en memoria.
+    private Func<AvailabilitySlot, bool> SetupAvailableSlots(params AvailabilitySlot[] slots)
+    {
+        Expression<Func<AvailabilitySlot, bool>>? captured = null;
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()))
+            .Callback<Expression<Func<AvailabilitySlot, bool>>, string[]>((predicate, _) => captured = predicate)
+            .ReturnsAsync(slots);
+
+        return slot => captured!.Compile()(slot);
+    }
+
+    [Fact]
+    public async Task GetAll_MarcaHasAvailabilitySoloEnLosMedicosConTurnosDisponibles()
+    {
+        var withSchedule = TestData.MakeDoctor(Guid.NewGuid(), name: "Dr Con Agenda");
+        var withoutSchedule = TestData.MakeDoctor(Guid.NewGuid(), name: "Dr Sin Agenda");
+        SetupDoctorsPage(withSchedule, withoutSchedule);
+        SetupAvailableSlots(TestData.MakeSlot(withSchedule.Id));
+
+        var result = await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(result.Data.Single(d => d.Id == withSchedule.Id).HasAvailability);
+        Assert.False(result.Data.Single(d => d.Id == withoutSchedule.Id).HasAvailability);
+    }
+
+    [Fact]
+    public async Task GetAll_SoloCuentaSlotsDisponiblesYFuturosDeLosMedicosDeLaPagina()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        SetupDoctorsPage(doctor);
+        var predicate = SetupAvailableSlots();
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow, status: SlotStatus.Booked)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: tomorrow, status: SlotStatus.Blocked)));
+        Assert.False(predicate(TestData.MakeSlot(doctor.Id, date: yesterday)));
+        Assert.False(predicate(TestData.MakeSlot(Guid.NewGuid(), date: tomorrow)));
+    }
+
+    [Fact]
+    public async Task GetAll_PaginaVacia_NoConsultaLosSlots()
+    {
+        SetupDoctorsPage();
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        _persistence.Verify(p => p.GetFiltered(
+            It.IsAny<Expression<Func<AvailabilitySlot, bool>>>(), It.IsAny<string[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetById_MedicoConTurnosDisponibles_HasAvailabilityTrue()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(doctor.Id, It.IsAny<string[]>())).ReturnsAsync(doctor);
+        SetupAvailableSlots(TestData.MakeSlot(doctor.Id));
+
+        var result = await _sut.GetById(doctor.Id);
+
+        Assert.True(result.HasAvailability);
+    }
+
+    [Fact]
+    public async Task Create_MedicoNuevo_NoTieneAgenda()
+    {
+        var spec = TestData.MakeSpeciality();
+        _persistence.Setup(p => p.GetById<Speciality>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(spec);
+        _persistence.Setup(p => p.Add(It.IsAny<Doctor>())).ReturnsAsync((Doctor d) => d);
+
+        var result = await _sut.Create(Req(spec.Id));
+
+        Assert.False(result.HasAvailability);
+    }
+
     // ---------------------------------------------------------------- Delete
 
     [Fact]
@@ -120,6 +238,47 @@ public class DoctorServiceTests
         var ex = await Assert.ThrowsAsync<ValidationException>(
             () => _sut.GetAll(new PaginationQuery(null, null), "AB"));
         Assert.Equal(nameof(ErrorCodes.DOCTOR_NAME_LENGTH), ex.Error.ErrorCode);
+    }
+
+    // Captura el predicado que el service le pasa a Paginate y lo evalúa en memoria contra
+    // médicos de dos especialidades: así se prueba el filtro real sin una base de datos.
+    private Func<Doctor, bool> CapturePaginatePredicate()
+    {
+        Expression<Func<Doctor, bool>>? captured = null;
+        _persistence.Setup(p => p.Paginate(
+                It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<Expression<Func<Doctor, bool>>>(),
+                It.IsAny<Expression<Func<Doctor, string>>>(),
+                It.IsAny<string[]>()))
+            .Callback<int, int, Expression<Func<Doctor, bool>>, Expression<Func<Doctor, string>>, string[]>(
+                (_, _, predicate, _, _) => captured = predicate)
+            .ReturnsAsync(new Pagination<Doctor>(10, 1, 0, []));
+
+        return doctor => captured!.Compile()(doctor);
+    }
+
+    [Fact]
+    public async Task GetAll_ConFiltroDeEspecialidad_SoloIncluyeMedicosDeEsaEspecialidad()
+    {
+        var cardiology = Guid.NewGuid();
+        var neurology = Guid.NewGuid();
+        var predicate = CapturePaginatePredicate();
+
+        await _sut.GetAll(new PaginationQuery(null, null), specialtyId: cardiology);
+
+        Assert.True(predicate(TestData.MakeDoctor(cardiology)));
+        Assert.False(predicate(TestData.MakeDoctor(neurology)));
+    }
+
+    [Fact]
+    public async Task GetAll_SinFiltros_IncluyeTodosLosMedicos()
+    {
+        var predicate = CapturePaginatePredicate();
+
+        await _sut.GetAll(new PaginationQuery(null, null));
+
+        Assert.True(predicate(TestData.MakeDoctor(Guid.NewGuid())));
+        Assert.True(predicate(TestData.MakeDoctor(Guid.NewGuid())));
     }
 
     [Fact]
@@ -234,6 +393,35 @@ public class DoctorServiceTests
         Assert.Equal("AVAILABLE", result[0].Status);
         Assert.Equal(booked.Id, result[1].Id);
         Assert.Equal("BOOKED", result[1].Status);
+    }
+
+    [Fact]
+    public async Task GetAvailabilities_ConAnioYMes_ConsultaLasReglasDeEseMes()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(doctor);
+        Expression<Func<AvailabilityRule, bool>>? captured = null;
+        _persistence.Setup(p => p.GetFiltered(
+                It.IsAny<Expression<Func<AvailabilityRule, bool>>>(), It.IsAny<string[]>()))
+            .Callback<Expression<Func<AvailabilityRule, bool>>, string[]>((predicate, _) => captured = predicate)
+            .ReturnsAsync(Array.Empty<AvailabilityRule>());
+
+        await _sut.GetAvailabilities(doctor.Id, 2026, 8);
+
+        var predicate = captured!.Compile();
+        Assert.True(predicate(TestData.MakeRule(doctor.Id)));      // MakeRule es de 08/2026
+        Assert.False(predicate(new AvailabilityRule(doctor.Id, 2026, 9, DayOfWeek.Tuesday,
+            new TimeOnly(9, 0), new TimeOnly(12, 0))));
+    }
+
+    [Fact]
+    public async Task GetAvailabilities_MesInvalido_Lanza400()
+    {
+        var doctor = TestData.MakeDoctor(Guid.NewGuid());
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>())).ReturnsAsync(doctor);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.GetAvailabilities(doctor.Id, 2026, 13));
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
     }
 
     [Fact]

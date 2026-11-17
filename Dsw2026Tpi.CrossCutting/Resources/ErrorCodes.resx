@@ -120,6 +120,9 @@
   <data name="AUTHENTICATION_FAILED" xml:space="preserve">
     <value>Usuario o contraseña incorrectos</value>
   </data>
+  <data name="AUTHENTICATION_REQUIRED" xml:space="preserve">
+    <value>Debe iniciar sesión para acceder a este recurso, o la sesión expiró</value>
+  </data>
   <data name="AUTHORIZATION_FAILED" xml:space="preserve">
     <value>Se requieren permisos para la operación solicitada</value>
   </data>
@@ -174,6 +177,9 @@
   <data name="AVAILABILITY_INVALID_RANGE" xml:space="preserve">
     <value>La hora de inicio debe ser anterior a la de fin</value>
   </data>
+  <data name="AVAILABILITY_MONTH_INVALID" xml:space="preserve">
+    <value>El mes indicado es inválido: year y month van juntos, month entre 1 y 12, y no puede ser un mes pasado ni estar a más de 12 meses</value>
+  </data>
   <data name="AVAILABILITY_NOT_ALIGNED" xml:space="preserve">
     <value>Los horarios deben empezar y terminar en bloques de 30 minutos</value>
   </data>
@@ -198,6 +204,15 @@
   <data name="APPOINTMENT_NOT_CANCELLABLE" xml:space="preserve">
     <value>Solo se pueden cancelar turnos reservados</value>
   </data>
+  <data name="APPOINTMENT_OUTCOME_INVALID" xml:space="preserve">
+    <value>Solo se puede registrar un turno como ATTENDED o NO_SHOW</value>
+  </data>
+  <data name="APPOINTMENT_NOT_BOOKED" xml:space="preserve">
+    <value>Solo se puede registrar la asistencia de un turno reservado</value>
+  </data>
+  <data name="APPOINTMENT_NOT_STARTED" xml:space="preserve">
+    <value>No se puede registrar la asistencia de un turno que todavía no empezó</value>
+  </data>
   <data name="APPOINTMENT_REASON_LENGTH" xml:space="preserve">
     <value>El motivo debe tener al menos 5 caracteres</value>
   </data>
@@ -213,8 +228,14 @@
   <data name="APPOINTMENT_DATE_INVALID" xml:space="preserve">
     <value>El formato de fecha debe ser YYYY-MM-DD</value>
   </data>
+  <data name="APPOINTMENT_STATUS_INVALID" xml:space="preserve">
+    <value>El estado del turno es inválido. Valores posibles: BOOKED, CANCELLED, ATTENDED, NO_SHOW</value>
+  </data>
   <data name="PATIENT_DNI_INVALID" xml:space="preserve">
     <value>El DNI debe tener entre 7 y 10 dígitos</value>
+  </data>
+  <data name="PATIENT_FULLNAME_LENGTH" xml:space="preserve">
+    <value>El nombre completo debe tener entre 3 y 150 caracteres</value>
   </data>
   <data name="PATIENT_NOT_FOUND" xml:space="preserve">
     <value>No existe un paciente con ese DNI</value>
@@ -230,5 +251,11 @@
   </data>
   <data name="SLOT_RANGE_INVALID" xml:space="preserve">
     <value>El rango de fechas es inválido: use el formato YYYY-MM-DD, 'to' no puede ser anterior a 'from' y el rango no puede superar 31 días</value>
+  </data>
+  <data name="SLOT_STATUS_INVALID" xml:space="preserve">
+    <value>Un horario solo se puede pasar a BLOCKED o a AVAILABLE</value>
+  </data>
+  <data name="SLOT_BOOKED" xml:space="preserve">
+    <value>El horario tiene un turno reservado: primero hay que cancelar el turno</value>
   </data>
 </root>
