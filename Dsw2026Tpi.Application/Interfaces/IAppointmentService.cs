@@ -10,4 +10,6 @@ public interface IAppointmentService
         ClaimsPrincipal user);
 
     Task Cancel(Guid appointmentId, ClaimsPrincipal user);
+
+    Task<AppointmentModel.Response> UpdateStatus(Guid appointmentId, string status);
 }

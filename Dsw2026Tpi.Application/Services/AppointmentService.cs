@@ -157,6 +157,52 @@ public class AppointmentService : IAppointmentService
 
 
     }
+    // El turno y todo el grafo que necesita la respuesta (slot -> regla -> médico -> especialidad, y paciente).
+    private static readonly string[] FullGraph =
+    [
+        "AvailabilitySlot.AvailabilityRule.Doctor.Speciality",
+        "Patient"
+    ];
+
+    // PUT /api/appointments/{id}/status · admin. Cierra el ciclo del turno: los estados ATTENDED y
+    // NO_SHOW existen en el contrato (p. 21) pero no había forma de alcanzarlos. Solo desde BOOKED y
+    // una vez que el turno empezó: no se puede "atender" un turno futuro. El slot queda BOOKED
+    // porque ese horario ya se usó, a diferencia de la cancelación, que lo libera.
+    public async Task<AppointmentModel.Response> UpdateStatus(Guid appointmentId, string status)
+    {
+        var newStatus = (status ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "ATTENDED" => AppointmentStatus.Attended,
+            "NO_SHOW" => AppointmentStatus.NoShow,
+            _ => throw new ValidationException(
+                    nameof(ErrorCodes.APPOINTMENT_OUTCOME_INVALID),
+                    ErrorCodes.APPOINTMENT_OUTCOME_INVALID)
+                .WithDetail("status", "expected_ATTENDED_or_NO_SHOW")
+        };
+
+        var appointment = await _persistence.GetById<Appointment>(appointmentId, FullGraph)
+            ?? throw new EntityNotFoundException(nameof(ErrorCodes.APPOINTMENT_NOT_FOUND), ErrorCodes.APPOINTMENT_NOT_FOUND);
+
+        if (appointment.Status != AppointmentStatus.Booked)
+            throw new BusinessRuleException(nameof(ErrorCodes.APPOINTMENT_NOT_BOOKED), ErrorCodes.APPOINTMENT_NOT_BOOKED);
+
+        var slot = appointment.AvailabilitySlot!;
+        if (slot.SlotDate.ToDateTime(slot.StartTime) > DateTime.UtcNow)
+            throw new BusinessRuleException(nameof(ErrorCodes.APPOINTMENT_NOT_STARTED), ErrorCodes.APPOINTMENT_NOT_STARTED);
+
+        if (newStatus == AppointmentStatus.Attended)
+            appointment.MarkAsAttended();
+        else
+            appointment.MarkAsNoShow();
+
+        await _persistence.Update(appointment);
+
+        // No es un CRUD: registrar la asistencia es una funcionalidad que se audita.
+        _logger.LogInformation("El turno {AppointmentId} quedó en estado {Status}", appointmentId, newStatus);
+
+        return AppointmentQueryService.MapToResponse(appointment);
+    }
+
     public async Task Cancel(Guid appointmentId, ClaimsPrincipal user)
     {
         // 1. Extraemos los claims

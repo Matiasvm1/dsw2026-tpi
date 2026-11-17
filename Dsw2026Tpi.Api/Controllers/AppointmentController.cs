@@ -33,4 +33,17 @@ public class AppointmentController : AppController
         return Ok("ok");
     }
 
+    // PUT /api/appointments/{id}/status · solo admin: registra la asistencia (ATTENDED | NO_SHOW).
+    [HttpPut("{id:guid}/status")]
+    [Authorize(Policy = Policies.AdminPolicy)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] AppointmentModel.StatusRequest request)
+    {
+        var updated = await _service.UpdateStatus(id, request.Status);
+        return Ok(updated);
+    }
+
 }
