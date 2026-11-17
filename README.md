@@ -234,11 +234,13 @@ Leyenda de acceso: 🔓 público · 🔑 autenticado (cualquier rol) · 👤 sol
 ```
 
 **`POST /api/auth/patient/login`** — el `dni` es numérico, de 7 u 8 dígitos. Si el
-paciente no existe se registra automáticamente.
+paciente no existe se registra automáticamente. `fullName` es opcional (3 a 150
+caracteres, `400` `PATIENT_FULLNAME_LENGTH` si no): si viene, se guarda como nombre del
+paciente; si no viene, el nombre que ya tenga no se modifica.
 
 ```jsonc
 // request
-{ "email": "paciente@mail.com", "dni": 12345678 }
+{ "email": "paciente@mail.com", "dni": 12345678, "fullName": "Juan Pérez" }
 
 // 200 OK
 { "token": "eyJhbGciOi...", "role": "PACIENTE" }

@@ -329,6 +329,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("PATIENT_DNI_INVALID", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El nombre completo debe tener entre 3 y 150 caracteres.
+        /// </summary>
+        public static string PATIENT_FULLNAME_LENGTH {
+            get {
+                return ResourceManager.GetString("PATIENT_FULLNAME_LENGTH", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a No existe un paciente con ese DNI.

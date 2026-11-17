@@ -18,4 +18,6 @@ public class Patient : EntityBase
         Dni = dni;
         FullName = fullName;
     }
+
+    public void UpdateFullName(string fullName) => FullName = fullName;
 }

@@ -234,6 +234,9 @@
   <data name="PATIENT_DNI_INVALID" xml:space="preserve">
     <value>El DNI debe tener entre 7 y 10 dígitos</value>
   </data>
+  <data name="PATIENT_FULLNAME_LENGTH" xml:space="preserve">
+    <value>El nombre completo debe tener entre 3 y 150 caracteres</value>
+  </data>
   <data name="PATIENT_NOT_FOUND" xml:space="preserve">
     <value>No existe un paciente con ese DNI</value>
   </data>
