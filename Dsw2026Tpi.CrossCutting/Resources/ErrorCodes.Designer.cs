@@ -221,6 +221,15 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
                 return ResourceManager.GetString("AVAILABILITY_INVALID_RANGE", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Busca una cadena traducida similar a El mes indicado es inválido: year y month van juntos, month entre 1 y 12, y no puede ser un mes pasado ni estar a más de 12 meses.
+        /// </summary>
+        public static string AVAILABILITY_MONTH_INVALID {
+            get {
+                return ResourceManager.GetString("AVAILABILITY_MONTH_INVALID", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Busca una cadena traducida similar a El formato de hora debe ser HH:mm.

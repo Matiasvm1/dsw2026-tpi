@@ -187,4 +187,105 @@ public class AvailabilityServiceTests
         _persistence.Verify(p => p.Add(It.IsAny<AvailabilityRule>()), Times.Never);    // regla idéntica: reutilizada
         Assert.Single(result.Days); // el schedule en efecto sigue siendo el MARTES 09-12 reutilizado
     }
+
+    // ---------------------------------------------------------------- Mes destino (year / month)
+
+    private static (int Year, int Month) MonthsFromNow(int months)
+    {
+        var date = DateTime.UtcNow.AddMonths(months);
+        return (date.Year, date.Month);
+    }
+
+    private static AvailabilityModel.Request ReqForMonth(int? year, int? month) =>
+        new(Guid.NewGuid(), [new AvailabilityModel.DayRequest("MARTES", "09:00", "12:00")], year, month);
+
+    private (List<AvailabilityRule> Rules, List<AvailabilitySlot> Slots) CaptureCreated()
+    {
+        var rules = new List<AvailabilityRule>();
+        var slots = new List<AvailabilitySlot>();
+        _persistence.Setup(p => p.AddRange(It.IsAny<IEnumerable<AvailabilityRule>>()))
+            .Callback<IEnumerable<AvailabilityRule>>(saved =>
+            {
+                rules.AddRange(saved);
+                slots.AddRange(saved.SelectMany(r => r.Slots));
+            })
+            .Returns(Task.CompletedTask);
+        return (rules, slots);
+    }
+
+    [Fact]
+    public async Task Create_SinAnioNiMes_UsaElMesActual()
+    {
+        DoctorExists();
+        var (rules, _) = CaptureCreated();
+        var (year, month) = MonthsFromNow(0);
+
+        var result = await _sut.Create(ReqForMonth(null, null));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+        Assert.Equal((year, month), ((int)rules.Single().Year, (int)rules.Single().Month));
+    }
+
+    [Fact]
+    public async Task Create_ConMesSiguiente_GeneraLaReglaYLosTurnosDeEseMesDesdeElDia1()
+    {
+        DoctorExists();
+        var (rules, slots) = CaptureCreated();
+        var (year, month) = MonthsFromNow(1);
+
+        var result = await _sut.Create(ReqForMonth(year, month));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+        Assert.Equal((year, month), ((int)rules.Single().Year, (int)rules.Single().Month));
+
+        // Todos los martes del mes siguiente, desde el primero, con sus 6 turnos de 30 minutos.
+        var tuesdays = Enumerable.Range(1, DateTime.DaysInMonth(year, month))
+            .Select(day => new DateOnly(year, month, day))
+            .Where(date => date.DayOfWeek == DayOfWeek.Tuesday)
+            .ToList();
+        Assert.Equal(tuesdays.Count * 6, slots.Count);
+        Assert.Equal(tuesdays.First(), slots.Min(s => s.SlotDate));
+    }
+
+    [Fact]
+    public async Task Update_ConMesSiguiente_ReconfiguraEseMes()
+    {
+        DoctorExists();
+        ExistingRules();
+        ExistingSlots();
+        var (year, month) = MonthsFromNow(1);
+
+        var result = await _sut.Update(ReqForMonth(year, month));
+
+        Assert.Equal((year, month), (result.Year, result.Month));
+    }
+
+    [Theory]
+    [InlineData(2026, null, "year_and_month_required_together")]
+    [InlineData(null, 5, "year_and_month_required_together")]
+    [InlineData(2026, 13, "month_between_1_and_12")]
+    [InlineData(2026, 0, "month_between_1_and_12")]
+    public async Task Create_AnioOMesInvalido_Lanza400(int? year, int? month, string issue)
+    {
+        DoctorExists();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.Create(ReqForMonth(year, month)));
+
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
+        Assert.Equal(issue, ex.Error.Details.Single().Issue);
+    }
+
+    [Theory]
+    [InlineData(-1, "month_in_the_past")]
+    [InlineData(13, "month_max_12_ahead")]
+    public async Task Create_MesPasadoOMuyLejano_Lanza400(int monthsFromNow, string issue)
+    {
+        DoctorExists();
+        var (year, month) = MonthsFromNow(monthsFromNow);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => _sut.Create(ReqForMonth(year, month)));
+
+        Assert.Equal(nameof(ErrorCodes.AVAILABILITY_MONTH_INVALID), ex.Error.ErrorCode);
+        Assert.Equal(issue, ex.Error.Details.Single().Issue);
+    }
 }

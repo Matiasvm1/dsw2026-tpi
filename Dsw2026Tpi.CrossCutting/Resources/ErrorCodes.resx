@@ -177,6 +177,9 @@
   <data name="AVAILABILITY_INVALID_RANGE" xml:space="preserve">
     <value>La hora de inicio debe ser anterior a la de fin</value>
   </data>
+  <data name="AVAILABILITY_MONTH_INVALID" xml:space="preserve">
+    <value>El mes indicado es inválido: year y month van juntos, month entre 1 y 12, y no puede ser un mes pasado ni estar a más de 12 meses</value>
+  </data>
   <data name="AVAILABILITY_NOT_ALIGNED" xml:space="preserve">
     <value>Los horarios deben empezar y terminar en bloques de 30 minutos</value>
   </data>

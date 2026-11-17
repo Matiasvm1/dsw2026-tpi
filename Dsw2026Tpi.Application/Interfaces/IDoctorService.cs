@@ -19,7 +19,7 @@ public interface IDoctorService
     Task Delete(Guid id);
 
     Task<IEnumerable<DoctorModel.AvailabilityResponse>> GetAvailabilities(
-        Guid doctorId);
+        Guid doctorId, int? year = null, int? month = null);
 
     Task<IEnumerable<DoctorModel.SlotResponse>> GetSlots(
         Guid doctorId, string? from, string? to);

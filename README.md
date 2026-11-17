@@ -351,6 +351,12 @@ la sección `NonWorkingDays` de `appsettings.json`.
 El `PUT` reconfigura la agenda **preservando los turnos ya reservados**: sobrescribe
 únicamente los slots libres.
 
+Por defecto se trabaja sobre el **mes actual**. Para cargar la agenda de otro mes por
+adelantado, el request acepta `year` y `month` (opcionales, van juntos): por ejemplo,
+`"year": 2026, "month": 11`. No se aceptan meses pasados ni más de 12 meses adelante
+(`400` `AVAILABILITY_MONTH_INVALID`). En un mes futuro los turnos se generan desde el día 1.
+`GET /api/doctors/{id}/availabilities?year=&month=` devuelve la agenda de ese mes.
+
 ```jsonc
 // request
 {

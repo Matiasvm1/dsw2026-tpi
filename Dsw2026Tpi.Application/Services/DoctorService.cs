@@ -189,19 +189,21 @@ public class DoctorService : IDoctorService
     }
 
 
+    // Sin year/month devuelve el mes actual (contrato, p. 17). Con ellos, la agenda de ese mes: la
+    // pantalla de disponibilidad del admin la necesita para ver o editar el mes siguiente.
     public async Task<IEnumerable<DoctorModel.AvailabilityResponse>>
-    GetAvailabilities(Guid doctorId)
+    GetAvailabilities(Guid doctorId, int? year = null, int? month = null)
     {
         var doctor = await _persistence.GetById<Doctor>(doctorId)
             ?? throw new EntityNotFoundException(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ErrorCodes.DOCTOR_NOT_FOUND);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var (targetYear, targetMonth) = MonthSelection.Resolve(year, month, DateTime.UtcNow);
 
         var rules = await _persistence.GetFiltered<AvailabilityRule>(
             rule =>
                 rule.DoctorId == doctorId &&
-                rule.Year == today.Year &&
-                rule.Month == today.Month);
+                rule.Year == targetYear &&
+                rule.Month == targetMonth);
 
         return rules!
             .OrderBy(rule =>
