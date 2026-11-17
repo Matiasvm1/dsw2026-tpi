@@ -88,6 +88,35 @@ public class DoctorServiceTests
         _persistence.Verify(p => p.Update(It.IsAny<Doctor>()), Times.Once);
     }
 
+    // ---------------------------------------------------------------- GetById
+
+    [Fact]
+    public async Task GetById_MedicoInexistente_Lanza404()
+    {
+        _persistence.Setup(p => p.GetById<Doctor>(It.IsAny<Guid>(), It.IsAny<string[]>()))
+            .ReturnsAsync((Doctor?)null);
+
+        var ex = await Assert.ThrowsAsync<EntityNotFoundException>(() => _sut.GetById(Guid.NewGuid()));
+        Assert.Equal(nameof(ErrorCodes.DOCTOR_NOT_FOUND), ex.Error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetById_MedicoExistente_DevuelveElMedicoConSuEspecialidad()
+    {
+        var spec = TestData.MakeSpeciality();
+        var doctor = TestData.MakeDoctor(spec.Id, spec);
+        _persistence.Setup(p => p.GetById<Doctor>(doctor.Id, It.IsAny<string[]>())).ReturnsAsync(doctor);
+
+        var result = await _sut.GetById(doctor.Id);
+
+        Assert.Equal(doctor.Id, result.Id);
+        Assert.Equal("Dr House", result.Name);
+        Assert.Equal("MP12345", result.LicenseNumber);
+        Assert.Equal(spec.Id, result.Specialty!.Id);
+        Assert.Equal(spec.Name, result.Specialty.Name);
+        _persistence.Verify(p => p.GetById<Doctor>(doctor.Id, new[] { nameof(Doctor.Speciality) }), Times.Once);
+    }
+
     // ---------------------------------------------------------------- Delete
 
     [Fact]
